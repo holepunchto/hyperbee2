@@ -1,0 +1,19 @@
+{
+  "name": "hyperbee2",
+  "version": "0.0.0",
+  "description": "WIP - nothing to see here",
+  "main": "index.js",
+  "dependencies": {
+    "hyperschema": "^1.14.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mafintosh/hyperbee2.git"
+  },
+  "author": "Mathias Buus (@mafintosh)",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/mafintosh/hyperbee2/issues"
+  },
+  "homepage": "https://github.com/mafintosh/hyperbee2"
+}
