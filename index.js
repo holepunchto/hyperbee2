@@ -1,7 +1,7 @@
 const b4a = require('b4a')
-const { Readable } = require('streamx')
-const { getEncoding } = require('./spec')
+const KeyValueStream = require('./lib/read-stream.js')
 const c = require('compact-encoding')
+const { getEncoding } = require('./spec')
 
 const T = 5
 const MIN_KEYS = T - 1
@@ -208,70 +208,15 @@ module.exports = class Hyperbee2 {
     await this.core.append(buffers)
   }
 
-  createReadStream ({ limit = Infinity, gte = null, gt = null, lte = null, lt = null } = {}) {
-    const rs = new Readable()
-
-    const stack = this.root ? [{ node: this.root, offset: 0 }] : []
-
-    const start = gte || gt
-    const end = lte || lt
-
-    const startCompare = gte ? 0 : 1
-    const endCompare = lte ? 0 : -1
-
-    if (start && stack.length) {
-      while (true) {
-        const top = stack[stack.length - 1]
-
-        for (let i = 0; i < top.node.keys.length; i++) {
-          let c = b4a.compare(start, top.node.keys[i].key)
-          if (c < 0) break
-          top.offset = 2 * i + 1 + (c === 0 ? startCompare : 1)
-        }
-
-        const child = (top.offset & 1) === 0
-        const k = top.offset >> 1
-
-        if (!child || k >= top.node.children.length) break
-
-        stack.push({
-          offset: 0,
-          node: top.node.children[k]
-        })
-      }
-    }
-
-    while (stack.length && limit > 0) {
-      const top = stack.pop()
-
-      const offset = top.offset++
-      const child = (offset & 1) === 0
-      const k = offset >> 1
-
-      if (child) {
-        stack.push(top)
-        if (k < top.node.children.length) {
-          stack.push({ node: top.node.children[k], offset: 0 })
-        }
-      } else if (k < top.node.keys.length) {
-        const result = top.node.keys[k]
-        const c = end ? b4a.compare(result.key, end) : -1
-        if (c > endCompare) break
-        stack.push(top)
-        rs.push(result)
-        limit--
-      }
-    }
-
-    rs.push(null)
-
-    return rs
+  createReadStream (range) {
+    return new KeyValueStream(this, range)
   }
 
-  async tmp () {
-    if (this.core.length === 0) return null
-    const seq = this.core.length - 1
-    await this.inflate(seq, 0)
+  async peek (range = {}) {
+    const rs = new KeyValueStream(this, { ...range, limit: 1 })
+    let entry = null
+    for await (const data of rs) entry = data
+    return entry
   }
 
   async getBlock (seq) {
