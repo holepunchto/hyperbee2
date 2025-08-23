@@ -15,9 +15,11 @@ if (b.core.length === 0) {
   await w.flush()
 }
 
-console.log(await b.tmp())
+// console.log(await b.tmp())
 
-// console.log(await b.get(Buffer.from('#55')))
+for (let i = 0; i < 100; i++) {
+  console.log(await b.get(Buffer.from('#' + i)))
+}
 // console.log(b.core.length)
 
 // for await (const data of b.createReadStream({ gte: Buffer.from('#33'), lte: Buffer.from('#49') })) {

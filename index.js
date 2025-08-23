@@ -10,43 +10,28 @@ const MAX_CHILDREN = MIN_KEYS * 2 + 1
 const Block = getEncoding('@bee/block')
 
 class KeyValuePointer {
-  constructor (seq, offset, key, value, changed) {
+  constructor (seq, offset, changed, key, value) {
     this.seq = seq
     this.offset = offset
+    this.changed = changed
     this.key = key
     this.value = value
-    this.changed = changed
   }
 }
 
 class TreeNodePointer {
-  constructor (seq, offset, node) {
+  constructor (seq, offset, changed, value) {
     this.seq = seq
     this.offset = offset
-    this.node = node
-    this.changed = false
+    this.changed = changed
+    this.value = value
   }
 }
 
 class TreeNode {
-  constructor () {
-    this.keys = []
-    this.children = []
-    this.changed = false
-    this.seq = 0
-    this.offset = 0
-  }
-
-  static inflate (node) {
-    console.log(node)
-  }
-
-  async inflate () {
-
-  }
-
-  async load (i) {
-
+  constructor (keys, children) {
+    this.keys = keys
+    this.children = children
   }
 
   put (key, value, child) {
@@ -61,7 +46,7 @@ class TreeNode {
       c = b4a.compare(key, k.key)
 
       if (c === 0) {
-        this.keys[mid] = new KeyValuePointer(0, 0, key, value, true)
+        this.keys[mid] = new KeyValuePointer(0, 0, true, key, value)
         return true
       }
 
@@ -70,35 +55,29 @@ class TreeNode {
     }
 
     const i = c < 0 ? e : s
-    this.keys.splice(i, 0, new KeyValuePointer(0, 0, key, value, true))
+    this.keys.splice(i, 0, new KeyValuePointer(0, 0, true, key, value))
     if (child) this.children.splice(i + 1, 0, child)
 
     return this.keys.length < MAX_CHILDREN
   }
 
-  flush () {
-    this.changed = false
-  }
-
   setValue (i, value) {
     this.changed = true
-    this.keys[i] = new KeyValuePointer(0, 0, this.keys[i].key, value, true)
+    this.keys[i] = new KeyValuePointer(0, 0, true, this.keys[i].key, value)
   }
 
   split () {
     const len = this.keys.length >> 1
-    const right = new TreeNodePointer(0, 0, new TreeNode())
+    const right = new TreeNodePointer(0, 0, true, new TreeNode([], []))
 
-    right.changed = true
-
-    while (right.node.keys.length < len) right.node.keys.push(this.keys.pop())
-    right.node.keys.reverse()
+    while (right.value.keys.length < len) right.value.keys.push(this.keys.pop())
+    right.value.keys.reverse()
 
     const median = this.keys.pop()
 
     if (this.children.length) {
-      while (right.node.children.length < len + 1) right.node.children.push(this.children.pop())
-      right.node.children.reverse()
+      while (right.value.children.length < len + 1) right.value.children.push(this.children.pop())
+      right.value.children.reverse()
     }
 
     return {
@@ -168,7 +147,7 @@ module.exports = class Hyperbee2 {
       node.changed = false
       update.node.push(node)
 
-      for (const k of node.node.keys) {
+      for (const k of node.value.keys) {
         if (!k.changed) continue
         k.changed = false
         update.keys.push(k)
@@ -176,8 +155,8 @@ module.exports = class Hyperbee2 {
 
       let first = true
 
-      for (let i = 0; i < node.node.children.length; i++) {
-        const next = node.node.children[i]
+      for (let i = 0; i < node.value.children.length; i++) {
+        const next = node.value.children[i]
         if (!next.changed) continue
 
         if (first) {
@@ -214,7 +193,7 @@ module.exports = class Hyperbee2 {
       for (const n of update.node) {
         n.seq = seq
         n.offset = block.tree.length
-        block.tree.push(n.node)
+        block.tree.push(n.value)
       }
 
       blocks[seq] = block
@@ -301,44 +280,51 @@ module.exports = class Hyperbee2 {
     return block
   }
 
-  async inflate (seq, offset) {
-    const block = await this.getBlock(seq)
-    const tree = block.tree[offset]
+  async inflate (ptr) {
+    const block = await this.getBlock(ptr.seq)
+    const tree = block.tree[ptr.offset]
 
     const keys = new Array(tree.keys.length)
     const children = new Array(tree.children.length)
 
     for (let i = 0; i < keys.length; i++) {
       const k = tree.keys[i]
-      const blk = k.seq === seq ? block : await this.getBlock(k.seq)
+      const blk = k.seq === ptr.seq ? block : await this.getBlock(k.seq)
       const d = blk.data[k.offset]
-      keys[i] = new KeyValuePointer(k.seq, k.offset, d.key, d.value, false)
+      keys[i] = new KeyValuePointer(k.seq, k.offset, false, d.key, d.value)
     }
 
     for (let i = 0; i < children.length; i++) {
       const c = tree.children[i]
-      children[i] = new TreeNodePointer(c.seq, c.offset, null)
+      children[i] = new TreeNodePointer(c.seq, c.offset, false, null)
     }
 
-    const node = new TreeNode()
-    node.keys = keys
-    node.children = children
+    ptr.value = new TreeNode(keys, children)
+  }
 
+  async bootstrap () {
+    await this.ready()
+    if (this.core.length === 0) return
+    const node = new TreeNodePointer(this.core.length - 1, 0, false, null)
+    await this.inflate(node)
+    this.root = node
     return node
   }
 
   async get (key) {
+    if (!this.root) await this.bootstrap()
+
     let node = this.root
     if (!node) return null
 
     while (true) {
       let s = 0
-      let e = node.node.keys.length
+      let e = node.value.keys.length
       let c = 0
 
       while (s < e) {
         const mid = (s + e) >> 1
-        const m = node.node.keys[mid]
+        const m = node.value.keys[mid]
 
         c = b4a.compare(key, m.key)
 
@@ -348,32 +334,34 @@ module.exports = class Hyperbee2 {
         else s = mid + 1
       }
 
-      if (!node.node.children.length) return null
+      if (!node.value.children.length) return null
 
       const i = c < 0 ? e : s
-      node = node.node.children[i]
+      node = node.value.children[i]
+      if (node.value === null) await this.inflate(node)
     }
   }
 
   async put (key, value) {
-    const stack = []
+    if (!this.root) await this.bootstrap()
+    if (!this.root) this.root = new TreeNodePointer(0, 0, true, new TreeNode([], []))
 
-    if (!this.root) this.root = new TreeNodePointer(0, 0, new TreeNode())
+    const stack = []
 
     let node = this.root
 
     const target = key
 
-    while (node.node.children.length) {
+    while (node.value.children.length) {
       stack.push(node)
 
       let s = 0
-      let e = node.node.keys.length
+      let e = node.value.keys.length
       let c = 0
 
       while (s < e) {
         const mid = (s + e) >> 1
-        const m = node.node.keys[mid]
+        const m = node.value.keys[mid]
 
         c = b4a.compare(target, m.key)
 
@@ -390,25 +378,25 @@ module.exports = class Hyperbee2 {
 
       const i = c < 0 ? e : s
 
-      node = node.node.children[i]
+      node = node.value.children[i]
+      if (node.value === null) await this.inflate(node)
     }
 
-    let needsSplit = !node.node.put(target, value, null)
+    let needsSplit = !node.value.put(target, value, null)
 
     for (let i = 0; i < stack.length; i++) stack[i].changed = true
 
     while (needsSplit) {
       const parent = stack.pop()
-      const { median, right } = node.node.split()
+      const { median, right } = node.value.split()
 
       if (parent) {
-        needsSplit = !parent.node.put(median.key, median.value, right)
+        needsSplit = !parent.value.put(median.key, median.value, right)
         node = parent
       } else {
-        this.root = new TreeNodePointer(0, 0, new TreeNode())
-        this.root.changed = true
-        this.root.node.keys.push(median)
-        this.root.node.children.push(node, right)
+        this.root = new TreeNodePointer(0, 0, true, new TreeNode([], []))
+        this.root.value.keys.push(median)
+        this.root.value.children.push(node, right)
         needsSplit = false
       }
     }
