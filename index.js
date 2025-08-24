@@ -196,7 +196,7 @@ module.exports = class Hyperbee2 {
         block.tree.push(n.value)
       }
 
-      blocks[seq] = block
+      blocks[seq - length] = block
     }
 
     const buffers = new Array(blocks.length)
@@ -273,7 +273,7 @@ module.exports = class Hyperbee2 {
 
         c = b4a.compare(key, m.key)
 
-        if (c === 0) return m.value
+        if (c === 0) return m
 
         if (c < 0) e = mid
         else s = mid + 1
