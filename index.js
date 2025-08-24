@@ -136,7 +136,7 @@ class WriteBatch {
     this.ops = []
     for (const op of ops) {
       if (op.put) await this.tree.put(op.key, op.value)
-      else await this.tree.del(op.key)
+      else await this.tree.delete(op.key)
     }
     await this.tree.flush()
   }
@@ -410,7 +410,7 @@ module.exports = class Hyperbee2 {
     }
   }
 
-  async del (key) {
+  async delete (key) {
     if (!this.root) await this.bootstrap()
     if (!this.root) return
 
