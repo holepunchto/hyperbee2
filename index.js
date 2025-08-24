@@ -1,5 +1,6 @@
 const b4a = require('b4a')
 const KeyValueStream = require('./lib/read-stream.js')
+const NodeCache = require('./lib/cache.js')
 const c = require('compact-encoding')
 const { getEncoding } = require('./spec')
 
@@ -9,7 +10,7 @@ const MAX_CHILDREN = MIN_KEYS * 2 + 1
 
 const Block = getEncoding('@bee/block')
 
-class KeyValuePointer {
+class DataPointer {
   constructor (seq, offset, changed, key, value) {
     this.seq = seq
     this.offset = offset
@@ -25,6 +26,9 @@ class TreeNodePointer {
     this.offset = offset
     this.changed = changed
     this.value = value
+
+    this.next = null
+    this.prev = null
   }
 }
 
@@ -46,7 +50,7 @@ class TreeNode {
       c = b4a.compare(key, k.key)
 
       if (c === 0) {
-        this.keys[mid] = new KeyValuePointer(0, 0, true, key, value)
+        this.keys[mid] = new DataPointer(0, 0, true, key, value)
         return true
       }
 
@@ -55,7 +59,7 @@ class TreeNode {
     }
 
     const i = c < 0 ? e : s
-    this.keys.splice(i, 0, new KeyValuePointer(0, 0, true, key, value))
+    this.keys.splice(i, 0, new DataPointer(0, 0, true, key, value))
     if (child) this.children.splice(i + 1, 0, child)
 
     return this.keys.length < MAX_CHILDREN
@@ -63,7 +67,7 @@ class TreeNode {
 
   setValue (i, value) {
     this.changed = true
-    this.keys[i] = new KeyValuePointer(0, 0, true, this.keys[i].key, value)
+    this.keys[i] = new DataPointer(0, 0, true, this.keys[i].key, value)
   }
 
   split () {
@@ -109,9 +113,11 @@ class WriteBatch {
 }
 
 module.exports = class Hyperbee2 {
-  constructor (core) {
+  constructor (core, { maxCacheSize = 4096, cache = new NodeCache() } = {}) {
     this.core = core
     this.root = null
+    this.cache = cache
+    this.maxCacheSize = maxCacheSize
   }
 
   checkout () {
@@ -225,6 +231,16 @@ module.exports = class Hyperbee2 {
     return block
   }
 
+  bump (ptr) {
+    this.cache.bump(ptr)
+    while (this.cache.size > this.maxCacheSize) {
+      const old = this.cache.oldest()
+      this.cache.remove(old)
+      old.value = null
+    }
+    return ptr.value
+  }
+
   async inflate (ptr) {
     const block = await this.getBlock(ptr.seq)
     const tree = block.tree[ptr.offset]
@@ -236,7 +252,7 @@ module.exports = class Hyperbee2 {
       const k = tree.keys[i]
       const blk = k.seq === ptr.seq ? block : await this.getBlock(k.seq)
       const d = blk.data[k.offset]
-      keys[i] = new KeyValuePointer(k.seq, k.offset, false, d.key, d.value)
+      keys[i] = new DataPointer(k.seq, k.offset, false, d.key, d.value)
     }
 
     for (let i = 0; i < children.length; i++) {
@@ -245,13 +261,19 @@ module.exports = class Hyperbee2 {
     }
 
     ptr.value = new TreeNode(keys, children)
+    this.bump(ptr)
+
+    return ptr.value
   }
 
   async bootstrap () {
     await this.ready()
     if (this.core.length === 0) return
     const node = new TreeNodePointer(this.core.length - 1, 0, false, null)
-    await this.inflate(node)
+
+    if (node.value) this.bump(node)
+    else await this.inflate(node)
+
     this.root = node
     return node
   }
@@ -261,6 +283,9 @@ module.exports = class Hyperbee2 {
 
     let node = this.root
     if (!node) return null
+
+    if (node.value) this.bump(node)
+    else await this.inflate(node)
 
     while (true) {
       let s = 0
@@ -283,7 +308,9 @@ module.exports = class Hyperbee2 {
 
       const i = c < 0 ? e : s
       node = node.value.children[i]
-      if (node.value === null) await this.inflate(node)
+
+      if (node.value) this.bump(node)
+      else await this.inflate(node)
     }
   }
 
@@ -294,6 +321,9 @@ module.exports = class Hyperbee2 {
     const stack = []
 
     let node = this.root
+
+    if (node.value) this.bump(node)
+    else await this.inflate(node)
 
     const target = key
 
@@ -324,7 +354,9 @@ module.exports = class Hyperbee2 {
       const i = c < 0 ? e : s
 
       node = node.value.children[i]
-      if (node.value === null) await this.inflate(node)
+
+      if (node.value) this.bump(node)
+      else await this.inflate(node)
     }
 
     let needsSplit = !node.value.put(target, value, null)
