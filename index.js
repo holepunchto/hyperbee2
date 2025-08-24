@@ -66,8 +66,33 @@ class TreeNode {
   }
 
   setValue (i, value) {
-    this.changed = true
     this.keys[i] = new DataPointer(0, 0, true, this.keys[i].key, value)
+  }
+
+  removeKey (i) {
+    this.keys.splice(i, 1)
+    if (this.children.length) {
+      this.children.splice(i + 1, 1)
+    }
+  }
+
+  siblings (parent) {
+    for (let i = 0; i < parent.children.length; i++) {
+      if (parent.children[i].value !== this) continue // TODO: move to a seq/offset check instead
+
+      const left = i ? parent.children[i - 1] : null
+      const right = i < parent.children.length - 1 ? parent.children[i + 1] : null
+      return { left, index: i, right }
+    }
+
+    // TODO: assert
+    throw new Error('Bad parent')
+  }
+
+  merge (node, median) {
+    this.keys.push(median)
+    for (let i = 0; i < node.keys.length; i++) this.keys.push(node.keys[i])
+    for (let i = 0; i < node.children.length; i++) this.children.push(node.children[i])
   }
 
   split () {
@@ -102,11 +127,16 @@ class WriteBatch {
     this.ops.push({ put: true, key, value })
   }
 
+  tryDelete (key) {
+    this.ops.push({ put: false, key, value: null })
+  }
+
   async flush () {
     const ops = this.ops
     this.ops = []
     for (const op of ops) {
       if (op.put) await this.tree.put(op.key, op.value)
+      else await this.tree.del(op.key)
     }
     await this.tree.flush()
   }
@@ -235,6 +265,7 @@ module.exports = class Hyperbee2 {
     this.cache.bump(ptr)
     while (this.cache.size > this.maxCacheSize) {
       const old = this.cache.oldest()
+      if (old.changed) break
       this.cache.remove(old)
       old.value = null
     }
@@ -242,6 +273,11 @@ module.exports = class Hyperbee2 {
   }
 
   async inflate (ptr) {
+    if (ptr.value) {
+      this.bump(ptr)
+      return ptr.value
+    }
+
     const block = await this.getBlock(ptr.seq)
     const tree = block.tree[ptr.offset]
 
@@ -281,20 +317,19 @@ module.exports = class Hyperbee2 {
   async get (key) {
     if (!this.root) await this.bootstrap()
 
-    let node = this.root
-    if (!node) return null
-
-    if (node.value) this.bump(node)
-    else await this.inflate(node)
+    let ptr = this.root
+    if (!ptr) return null
 
     while (true) {
+      const v = ptr.value ? this.bump(ptr) : await this.inflate(ptr)
+
       let s = 0
-      let e = node.value.keys.length
+      let e = v.keys.length
       let c = 0
 
       while (s < e) {
         const mid = (s + e) >> 1
-        const m = node.value.keys[mid]
+        const m = v.keys[mid]
 
         c = b4a.compare(key, m.key)
 
@@ -304,13 +339,10 @@ module.exports = class Hyperbee2 {
         else s = mid + 1
       }
 
-      if (!node.value.children.length) return null
+      if (!v.children.length) return null
 
       const i = c < 0 ? e : s
-      node = node.value.children[i]
-
-      if (node.value) this.bump(node)
-      else await this.inflate(node)
+      ptr = v.children[i]
     }
   }
 
@@ -319,30 +351,29 @@ module.exports = class Hyperbee2 {
     if (!this.root) this.root = new TreeNodePointer(0, 0, true, new TreeNode([], []))
 
     const stack = []
-
-    let node = this.root
-
-    if (node.value) this.bump(node)
-    else await this.inflate(node)
-
     const target = key
 
-    while (node.value.children.length) {
-      stack.push(node)
+    let ptr = this.root
+
+    while (true) {
+      const v = ptr.value ? this.bump(ptr) : await this.inflate(ptr)
+      if (!v.children.length) break
+
+      stack.push(ptr)
 
       let s = 0
-      let e = node.value.keys.length
+      let e = v.keys.length
       let c = 0
 
       while (s < e) {
         const mid = (s + e) >> 1
-        const m = node.value.keys[mid]
+        const m = v.keys[mid]
 
         c = b4a.compare(target, m.key)
 
         if (c === 0) {
           if (b4a.compare(m.value, value)) return
-          node.setValue(mid, value)
+          v.setValue(mid, value)
           for (let i = 0; i < stack.length; i++) stack[i].changed = true
           return
         }
@@ -352,30 +383,169 @@ module.exports = class Hyperbee2 {
       }
 
       const i = c < 0 ? e : s
-
-      node = node.value.children[i]
-
-      if (node.value) this.bump(node)
-      else await this.inflate(node)
+      ptr = v.children[i]
     }
 
-    let needsSplit = !node.value.put(target, value, null)
+    const v = ptr.value ? this.bump(ptr) : await this.inflate(ptr)
+    let needsSplit = !v.put(target, value, null)
 
     for (let i = 0; i < stack.length; i++) stack[i].changed = true
 
     while (needsSplit) {
+      const v = ptr.value ? this.bump(ptr) : await this.inflate(ptr)
       const parent = stack.pop()
-      const { median, right } = node.value.split()
+      const { median, right } = v.split()
 
       if (parent) {
-        needsSplit = !parent.value.put(median.key, median.value, right)
-        node = parent
+        const p = parent.value ? this.bump(parent) : await this.inflate(parent)
+        needsSplit = !p.put(median.key, median.value, right)
+        ptr = parent
       } else {
         this.root = new TreeNodePointer(0, 0, true, new TreeNode([], []))
         this.root.value.keys.push(median)
-        this.root.value.children.push(node, right)
+        this.root.value.children.push(ptr, right)
+        this.bump(this.root)
         needsSplit = false
       }
     }
+  }
+
+  async del (key) {
+    if (!this.root) await this.bootstrap()
+    if (!this.root) return
+
+    let ptr = this.root
+
+    const stack = []
+
+    while (true) {
+      const v = ptr.value ? this.bump(ptr) : await this.inflate(ptr)
+      stack.push(ptr)
+
+      let s = 0
+      let e = v.keys.length
+      let c = 0
+
+      while (s < e) {
+        const mid = (s + e) >> 1
+        c = b4a.compare(key, v.keys[mid].key)
+
+        if (c === 0) {
+          if (v.children.length) await this._setKeyToNearestLeaf(v, mid, stack)
+          else v.removeKey(mid)
+
+          // we mark these as changed late, so we don't rewrite them if it is a 404
+          for (let i = 0; i < stack.length; i++) stack[i].changed = true
+          this.root = await this._rebalance(stack)
+          return
+        }
+
+        if (c < 0) e = mid
+        else s = mid + 1
+      }
+
+      if (!v.children.length) return
+
+      const i = c < 0 ? e : s
+      ptr = v.children[i]
+    }
+  }
+
+  async _setKeyToNearestLeaf (v, index, stack) {
+    let left = v.children[index]
+    let right = v.children[index + 1]
+
+    const [ls, rs] = await Promise.all([
+      this._leafSize(left, false),
+      this._leafSize(right, true)
+    ])
+
+    if (ls < rs) { // if fewer leaves on the left
+      stack.push(right)
+      let r = await this.inflate(right)
+      while (r.children.length) {
+        right = r.children[0]
+        stack.push(right)
+        r = await this.inflate(right)
+      }
+      v.keys[index] = r.keys.shift()
+    } else { // if fewer leaves on the right
+      stack.push(left)
+      let l = await this.inflate(right)
+      while (l.children.length) {
+        left = l.children[l.children.length - 1]
+        stack.push(left)
+        l = await this.inflate(left)
+      }
+      v.keys[index] = l.keys.pop()
+    }
+  }
+
+  async _leafSize (ptr, goLeft) {
+    let v = ptr.value ? this.bump(ptr) : await this.inflate(ptr)
+    while (v.children.length) {
+      ptr = v.children[goLeft ? 0 : v.children.length - 1]
+      v = ptr.value ? this.bump(ptr) : await this.inflate(ptr)
+    }
+    return v.keys.length
+  }
+
+  async _rebalance (stack) {
+    const root = stack[0]
+
+    while (stack.length > 1) {
+      const ptr = stack.pop()
+      const parent = stack[stack.length - 1]
+
+      const p = await this.inflate(stack[stack.length - 1])
+      const v = await this.inflate(ptr)
+
+      if (v.keys.length >= MIN_KEYS) return root
+
+      let { left, index, right } = v.siblings(p)
+
+      let l = left && await this.inflate(left)
+
+      // maybe borrow from left sibling?
+      if (l && l.keys.length > MIN_KEYS) {
+        left.changed = true
+        v.keys.unshift(p.keys[index - 1])
+        if (l.children.length) v.children.unshift(l.children.pop())
+        p.keys[index - 1] = l.keys.pop()
+        return root
+      }
+
+      let r = right && await this.inflate(right)
+
+      // maybe borrow from right sibling?
+      if (r && r.keys.length > MIN_KEYS) {
+        right.changed = true
+        v.keys.push(p.keys[index])
+        if (r.children.length) v.children.push(r.children.shift())
+        p.keys[index] = r.keys.shift()
+        return root
+      }
+
+      // merge node with another sibling
+      if (l) {
+        index--
+        r = v
+        right = ptr
+      } else {
+        l = v
+        left = ptr
+      }
+
+      left.changed = true
+      l.merge(r, p.keys[index])
+
+      parent.changed = true
+      p.removeKey(index)
+    }
+
+    const r = await this.inflate(root)
+    // check if the tree shrunk
+    if (!r.keys.length && r.children.length) return r.children[0]
+    return root
   }
 }
