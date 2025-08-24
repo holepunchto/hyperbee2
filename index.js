@@ -462,20 +462,20 @@ module.exports = class Hyperbee2 {
 
     if (ls < rs) { // if fewer leaves on the left
       stack.push(right)
-      let r = await this.inflate(right)
+      let r = right.value ? this.bump(right) : await this.inflate(right)
       while (r.children.length) {
         right = r.children[0]
         stack.push(right)
-        r = await this.inflate(right)
+        r = right.value ? this.bump(right) : await this.inflate(right)
       }
       v.keys[index] = r.keys.shift()
     } else { // if fewer leaves on the right
       stack.push(left)
-      let l = await this.inflate(right)
+      let l = left.value ? this.bump(left) : await this.inflate(left)
       while (l.children.length) {
         left = l.children[l.children.length - 1]
         stack.push(left)
-        l = await this.inflate(left)
+        l = left.value ? this.bump(left) : await this.inflate(left)
       }
       v.keys[index] = l.keys.pop()
     }
@@ -497,14 +497,15 @@ module.exports = class Hyperbee2 {
       const ptr = stack.pop()
       const parent = stack[stack.length - 1]
 
-      const p = await this.inflate(stack[stack.length - 1])
-      const v = await this.inflate(ptr)
+      const v = ptr.value ? this.bump(ptr) : await this.inflate(ptr)
 
       if (v.keys.length >= MIN_KEYS) return root
 
+      const p = parent.value ? this.bump(parent) : await this.inflate(parent)
+
       let { left, index, right } = v.siblings(p)
 
-      let l = left && await this.inflate(left)
+      let l = left && (left.value ? this.bump(left) : await this.inflate(left))
 
       // maybe borrow from left sibling?
       if (l && l.keys.length > MIN_KEYS) {
@@ -515,7 +516,7 @@ module.exports = class Hyperbee2 {
         return root
       }
 
-      let r = right && await this.inflate(right)
+      let r = right && (right.value ? this.bump(right) : await this.inflate(right))
 
       // maybe borrow from right sibling?
       if (r && r.keys.length > MIN_KEYS) {
@@ -543,7 +544,7 @@ module.exports = class Hyperbee2 {
       p.removeKey(index)
     }
 
-    const r = await this.inflate(root)
+    const r = root.value ? this.bump(root) : await this.inflate(root)
     // check if the tree shrunk
     if (!r.keys.length && r.children.length) return r.children[0]
     return root
