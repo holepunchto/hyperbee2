@@ -37,9 +37,7 @@ class Hyperbee {
   }
 
   snapshot () {
-    if (this.root) return new Hyperbee(this.core.session(), { cache: this.cache, root: this.root })
-    if (this.opened) return this.checkout(this.core.length)
-    return new Hyperbee(this.core.session(), { cache: this.cache, root: null })
+    return new Hyperbee(this.core.session(), { cache: this.cache, root: this.root })
   }
 
   write (opts) {
