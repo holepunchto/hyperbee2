@@ -116,8 +116,8 @@ class Hyperbee {
     return this.root === EMPTY ? null : this.root
   }
 
-  update () {
-    this.root = null
+  update (root = null) {
+    this.root = root
   }
 
   async get (key) {
