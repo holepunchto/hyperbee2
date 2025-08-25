@@ -1,10 +1,19 @@
 {
   "name": "hyperbee2",
   "version": "0.0.0",
-  "description": "WIP - nothing to see here",
+  "description": "btree",
   "main": "index.js",
+  "scripts": {
+    "test": "standard"
+  },
   "dependencies": {
-    "hyperschema": "^1.14.0"
+    "b4a": "^1.6.7",
+    "compact-encoding": "^2.16.1",
+    "hyperschema": "^1.14.0",
+    "streamx": "^2.22.1"
+  },
+  "devDependencies": {
+    "standard": "^17.1.2"
   },
   "repository": {
     "type": "git",
