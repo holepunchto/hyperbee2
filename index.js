@@ -3,41 +3,56 @@ const c = require('compact-encoding')
 const KeyValueStream = require('./lib/key-value-stream.js')
 const NodeCache = require('./lib/cache.js')
 const WriteBatch = require('./lib/write.js')
-const { DataPointer, TreeNode, TreeNodePointer } = require('./lib/tree.js')
+const { DataPointer, TreeNode, TreeNodePointer, EMPTY } = require('./lib/tree.js')
 const { Block } = require('./lib/encoding.js')
 
-// class Snapshot {
-//   constructor (core, root, cache) {
-//     this.core = core
-//     this.root = root
-//     this.cache = cache
-//   }
-// }
-
-module.exports = class Hyperbee2 {
-  constructor (core, { maxCacheSize = 4096, cache = new NodeCache() } = {}) {
+class Hyperbee {
+  constructor (core, { maxCacheSize = 4096, cache = new NodeCache(maxCacheSize), root = null } = {}) {
     this.core = core
-    this.root = null
+    this.root = root
     this.cache = cache
-    this.maxCacheSize = maxCacheSize
+
+    this.ready().catch(noop)
   }
 
-  // TODO
-  checkout () {
-    return this
+  get opening () {
+    return this.core.opening
   }
 
-  // TODO
+  get opened () {
+    return this.core.opened
+  }
+
+  get closing () {
+    return this.core.closing
+  }
+
+  get closed () {
+    return this.core.closed
+  }
+
+  checkout (length) {
+    const root = length === 0 ? EMPTY : new TreeNodePointer(length - 1, 0, false, null)
+    return new Hyperbee(this.core.session(), { cache: this.cache, root })
+  }
+
   snapshot () {
-    return this
+    if (this.root) return new Hyperbee(this.core.session(), { cache: this.cache, root: this.root })
+    if (this.opened) return this.checkout(this.core.length)
+    return new Hyperbee(this.core.session(), { cache: this.cache, root: null })
   }
 
-  write () {
-    return new WriteBatch(this)
+  write (opts) {
+    return new WriteBatch(this, opts)
   }
 
   async ready () {
     if (!this.core.opened) await this.core.ready()
+    if (this.root) return
+
+    this.root = this.core.length === 0
+      ? EMPTY
+      : new TreeNodePointer(this.core.length - 1, 0, false, null)
   }
 
   async close () {
@@ -62,13 +77,9 @@ module.exports = class Hyperbee2 {
   }
 
   bump (ptr) {
+    if (ptr.changed) return ptr.value
     this.cache.bump(ptr)
-    while (this.cache.size > this.maxCacheSize) {
-      const old = this.cache.oldest()
-      if (old.changed) break
-      this.cache.remove(old)
-      old.value = null
-    }
+    this.cache.gc()
     return ptr.value
   }
 
@@ -103,12 +114,8 @@ module.exports = class Hyperbee2 {
   }
 
   async _bootstrap () {
-    if (this.opened === false) await this.ready()
-    if (this.root) return this.root
-    if (this.core.length === 0) return null
-
-    this.root = new TreeNodePointer(this.core.length - 1, 0, false, null)
-    return this.root
+    await this.ready()
+    return this.root === EMPTY ? null : this.root
   }
 
   update () {
@@ -145,3 +152,7 @@ module.exports = class Hyperbee2 {
     }
   }
 }
+
+module.exports = Hyperbee
+
+function noop () {}

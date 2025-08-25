@@ -9,6 +9,12 @@ const last = await b.peek({ reverse: true })
 const n = last ? Number(last.key.toString().slice(1)) + 1 : 0
 console.log('last', n)
 
+{
+  const w = b.write({ truncate: 0 })
+  w.tryPut(Buffer.from('#0*'), Buffer.from('#0*'))
+  await w.flush()
+}
+
 if (b.core.length === 0) {
   const w = b.write()
 
