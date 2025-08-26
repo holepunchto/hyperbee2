@@ -1,19 +1,20 @@
 const test = require('brittle')
+const b4a = require('b4a')
 const { create } = require('./helpers')
 
 test('basic', async function (t) {
   const db = await create(t)
   const w = db.write()
 
-  w.tryPut(Buffer.from('hello'), Buffer.from('world'))
-  w.tryPut(Buffer.from('hej'), Buffer.from('verden'))
-  w.tryPut(Buffer.from('hi'), Buffer.from('ho'))
+  w.tryPut(b4a.from('hello'), b4a.from('world'))
+  w.tryPut(b4a.from('hej'), b4a.from('verden'))
+  w.tryPut(b4a.from('hi'), b4a.from('ho'))
 
   await w.flush()
 
-  t.alike((await db.get(Buffer.from('hi'))).value, Buffer.from('ho'))
-  t.alike((await db.get(Buffer.from('hej'))).value, Buffer.from('verden'))
-  t.alike((await db.get(Buffer.from('hello'))).value, Buffer.from('world'))
+  t.alike((await db.get(b4a.from('hi'))).value, b4a.from('ho'))
+  t.alike((await db.get(b4a.from('hej'))).value, b4a.from('verden'))
+  t.alike((await db.get(b4a.from('hello'))).value, b4a.from('world'))
 })
 
 test('100 keys', async function (t) {
@@ -22,13 +23,13 @@ test('100 keys', async function (t) {
   const expected = []
   for (let i = 0; i < 100; i++) {
     const w = db.write()
-    const k = Buffer.from('' + i)
+    const k = b4a.from('' + i)
     expected.push(k)
     w.tryPut(k, k)
     await w.flush()
   }
 
-  expected.sort(Buffer.compare)
+  expected.sort(b4a.compare)
   const actual = []
 
   for await (const data of db.createReadStream()) {
@@ -48,14 +49,14 @@ test('1000 keys in 10 batches', async function (t) {
   for (let i = 0; i < 10; i++) {
     const w = db.write()
     for (let j = 0; j < 100; j++) {
-      const k = Buffer.from('' + (n++))
+      const k = b4a.from('' + (n++))
       expected.push(k)
       w.tryPut(k, k)
     }
     await w.flush()
   }
 
-  expected.sort(Buffer.compare)
+  expected.sort(b4a.compare)
   const actual = []
 
   for await (const data of db.createReadStream()) {
@@ -75,7 +76,7 @@ test('basic fuzz (2k rounds)', async function (t) {
     const w = db.write()
     for (let j = 0; j < n; j++) {
       const put = Math.random() < 0.8
-      const k = Buffer.from('' + ((Math.random() * 10_000) | 0))
+      const k = b4a.from('' + ((Math.random() * 10_000) | 0))
       if (put) {
         expected.set(k.toString(), k)
         w.tryPut(k, k)
@@ -87,7 +88,7 @@ test('basic fuzz (2k rounds)', async function (t) {
     await w.flush()
   }
 
-  const sorted = [...expected.values()].sort(Buffer.compare)
+  const sorted = [...expected.values()].sort(b4a.compare)
   const actual = []
 
   for await (const data of db.createReadStream()) {
