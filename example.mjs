@@ -1,66 +1,41 @@
 import Hyperbee from './index.js'
-import Hypercore from 'hypercore'
+import Corestore from 'corestore'
 
-const b = new Hyperbee(new Hypercore('./sandbox/core'))
+const b = new Hyperbee(new Corestore('./sandbox/store'))
 
 await b.ready()
-const last = await b.peek({ reverse: true })
-
-const n = last ? Number(last.key.toString().slice(1)) + 1 : 0
-console.log('last', n)
-
-{
-  const w = b.write({ truncate: 0 })
-  w.tryPut(Buffer.from('#0*'), Buffer.from('#0*'))
-  await w.flush()
-}
 
 if (b.core.length === 0) {
   const w = b.write()
 
-  for (let i = 0; i < 1000; i++) {
+  for (let i = 0; i < 100; i++) {
     w.tryPut(Buffer.from('#' + i), Buffer.from('#' + i))
   }
-  // w.tryPut(Buffer.from('a'), Buffer.from('a'))
-  // w.tryPut(Buffer.from('b'), Buffer.from('b'))
-  // w.tryPut(Buffer.from('c'), Buffer.from('c'))
-  // w.tryPut(Buffer.from('d'), Buffer.from('d'))
-  // w.tryDelete(Buffer.from('#16'))
 
-  // for (let i = n; i < n + 50_000; i++) {
-  //   const k = '#' + i.toString().padStart(7, '0')
-  //   w.tryPut(Buffer.from(k), Buffer.from('' + i))
-  // }
-
-  console.time()
   await w.flush()
-  console.timeEnd()
 }
 
-console.log('pre get')
-console.log(await b.get(Buffer.from('#0')))
-console.log('post get')
+const c = new Hyperbee(b.store, { core: b.store.get({ name: 'bee2' }) })
+await c.ready()
 
-// console.log(b.core.length)
-// console.log(b.root)
-// // console.log(await b.get(Buffer.from('a')))
+if (c.core.length === 0) {
+  const w = c.write({ length: b.core.length, key: b.core.key })
 
-// // console.log((await b.peek({ reverse: true })).key.toString())
-// // console.log(b.root)
-// // console.time()
-let m = 0
-console.log('pre createReadStream')
-for await (const data of b.createReadStream()) {
-//   // console.log(await b.get(Buffer.from('#' + (m++).toString().padStart(7, '0'))))
-  console.log(++m, '-->', data.key.toString())
+  w.tryPut(Buffer.from('yo'), Buffer.from('yo'))
+  await w.flush()
 }
-// console.timeEnd()
 
-// for (let i = 0; i < 100; i++) {
-//   console.log(await b.get(Buffer.from('#' + i)))
-// }
-// console.log(b.core.length)
+const s = c.checkout(b.core.length, b.core.key)
 
-// for await (const data of b.createReadStream({ gte: Buffer.from('#33'), lte: Buffer.from('#49') })) {
-//   console.log(data.key.toString())
-// }
+console.log(!!(await c.get(Buffer.from('yo'))))
+console.log(!!(await s.get(Buffer.from('yo'))))
+
+for await (const data of c.createReadStream()) {
+  console.log(data.key.toString())
+}
+
+console.log()
+
+for await (const data of s.createReadStream()) {
+  console.log(data.key.toString())
+}

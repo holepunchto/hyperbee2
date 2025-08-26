@@ -13,20 +13,24 @@ let version = VERSION
 // @bee/pointer
 const encoding0 = {
   preencode (state, m) {
+    c.uint.preencode(state, m.core)
     c.uint.preencode(state, m.seq)
     c.uint.preencode(state, m.offset)
   },
   encode (state, m) {
+    c.uint.encode(state, m.core)
     c.uint.encode(state, m.seq)
     c.uint.encode(state, m.offset)
   },
   decode (state) {
     const r0 = c.uint.decode(state)
     const r1 = c.uint.decode(state)
+    const r2 = c.uint.decode(state)
 
     return {
-      seq: r0,
-      offset: r1
+      core: r0,
+      seq: r1,
+      offset: r2
     }
   }
 }
@@ -79,42 +83,52 @@ const encoding2 = {
 }
 
 // @bee/block.tree
-const encoding3_2 = c.array(c.frame(encoding1))
+const encoding3_3 = c.array(encoding1)
 // @bee/block.data
-const encoding3_3 = c.array(encoding2)
+const encoding3_4 = c.array(encoding2)
+// @bee/block.cores
+const encoding3_5 = c.array(c.fixed32)
 
 // @bee/block
 const encoding3 = {
   preencode (state, m) {
     c.uint.preencode(state, m.type)
     c.uint.preencode(state, m.batch)
-    state.end++ // max flag is 2 so always one byte
+    c.uint.preencode(state, m.pointer)
+    state.end++ // max flag is 4 so always one byte
 
-    if (m.tree) encoding3_2.preencode(state, m.tree)
-    if (m.data) encoding3_3.preencode(state, m.data)
+    if (m.tree) encoding3_3.preencode(state, m.tree)
+    if (m.data) encoding3_4.preencode(state, m.data)
+    if (m.cores) encoding3_5.preencode(state, m.cores)
   },
   encode (state, m) {
     const flags =
       (m.tree ? 1 : 0) |
-      (m.data ? 2 : 0)
+      (m.data ? 2 : 0) |
+      (m.cores ? 4 : 0)
 
     c.uint.encode(state, m.type)
     c.uint.encode(state, m.batch)
+    c.uint.encode(state, m.pointer)
     c.uint.encode(state, flags)
 
-    if (m.tree) encoding3_2.encode(state, m.tree)
-    if (m.data) encoding3_3.encode(state, m.data)
+    if (m.tree) encoding3_3.encode(state, m.tree)
+    if (m.data) encoding3_4.encode(state, m.data)
+    if (m.cores) encoding3_5.encode(state, m.cores)
   },
   decode (state) {
     const r0 = c.uint.decode(state)
     const r1 = c.uint.decode(state)
+    const r2 = c.uint.decode(state)
     const flags = c.uint.decode(state)
 
     return {
       type: r0,
       batch: r1,
-      tree: (flags & 1) !== 0 ? encoding3_2.decode(state) : null,
-      data: (flags & 2) !== 0 ? encoding3_3.decode(state) : null
+      pointer: r2,
+      tree: (flags & 1) !== 0 ? encoding3_3.decode(state) : null,
+      data: (flags & 2) !== 0 ? encoding3_4.decode(state) : null,
+      cores: (flags & 4) !== 0 ? encoding3_5.decode(state) : null
     }
   }
 }

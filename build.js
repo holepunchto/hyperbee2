@@ -8,6 +8,11 @@ bee.register({
   compact: true,
   fields: [
     {
+      name: 'core',
+      type: 'uint',
+      required: true
+    },
+    {
       name: 'seq',
       type: 'uint',
       required: true
@@ -22,6 +27,7 @@ bee.register({
 
 bee.register({
   name: 'tree',
+  compact: true,
   fields: [
     {
       name: 'keys',
@@ -69,6 +75,11 @@ bee.register({
       required: true
     },
     {
+      name: 'pointer',
+      type: 'uint',
+      required: true
+    },
+    {
       name: 'tree',
       type: '@bee/tree',
       array: true
@@ -76,6 +87,11 @@ bee.register({
     {
       name: 'data',
       type: '@bee/data',
+      array: true
+    },
+    {
+      name: 'cores',
+      type: 'fixed32',
       array: true
     }
   ]
