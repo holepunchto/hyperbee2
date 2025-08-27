@@ -25,7 +25,7 @@ if (c.core.length === 0) {
   await w.flush()
 }
 
-const s = c.checkout(b.core.length, b.core.key)
+const s = c.checkout(b.head())
 
 console.log(!!(await c.get(Buffer.from('yo'))))
 console.log(!!(await s.get(Buffer.from('yo'))))

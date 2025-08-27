@@ -57,7 +57,7 @@ class Hyperbee {
     return this.store.replicate(...opts)
   }
 
-  checkout (length, key) {
+  checkout ({ length = this.core.length, key = null } = {}) {
     const context = key ? this.context.getContextByKey(key) : this.context
     const root = length === 0 ? EMPTY : new TreeNodePointer(context, 0, length - 1, 0, false, null)
     return new Hyperbee(this.store, { context: this.context, cache: this.cache, root, view: true })
