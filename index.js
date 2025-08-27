@@ -12,13 +12,15 @@ class Hyperbee {
       context = new CoreContext(store, core || store.get({ name: 'bee' })),
       maxCacheSize = 4096,
       cache = new NodeCache(maxCacheSize),
-      root = null
+      root = null,
+      view = false
     } = options
 
     this.store = store
     this.root = root
     this.cache = cache
     this.context = context
+    this.view = view
 
     this.ready().catch(noop)
   }
@@ -46,11 +48,11 @@ class Hyperbee {
   checkout (length, key) {
     const context = key ? this.context.getContextByKey(key) : this.context
     const root = length === 0 ? EMPTY : new TreeNodePointer(context, 0, length - 1, 0, false, null)
-    return new Hyperbee(this.store, { context: this.context, cache: this.cache, root })
+    return new Hyperbee(this.store, { context: this.context, cache: this.cache, root, view: true })
   }
 
   snapshot () {
-    return new Hyperbee(this.store, { context: this.context, cache: this.cache, root: this.root })
+    return new Hyperbee(this.store, { context: this.context, cache: this.cache, root: this.root, view: true })
   }
 
   write (opts) {
@@ -67,7 +69,7 @@ class Hyperbee {
   }
 
   async close () {
-    // TODO
+    if (!this.view) await this.store.close()
   }
 
   createReadStream (range) {

@@ -10,7 +10,7 @@ const VERSION = 1
 // eslint-disable-next-line no-unused-vars
 let version = VERSION
 
-// @bee/pointer
+// @bee/tree-pointer
 const encoding0 = {
   preencode (state, m) {
     c.uint.preencode(state, m.core)
@@ -35,24 +35,45 @@ const encoding0 = {
   }
 }
 
-// @bee/tree.keys
-const encoding1_0 = c.array(encoding0)
-// @bee/tree.children
-const encoding1_1 = encoding1_0
-
-// @bee/tree
+// @bee/block-pointer
 const encoding1 = {
   preencode (state, m) {
-    encoding1_0.preencode(state, m.keys)
-    encoding1_1.preencode(state, m.children)
+    c.uint.preencode(state, m.core)
+    c.uint.preencode(state, m.seq)
   },
   encode (state, m) {
-    encoding1_0.encode(state, m.keys)
-    encoding1_1.encode(state, m.children)
+    c.uint.encode(state, m.core)
+    c.uint.encode(state, m.seq)
   },
   decode (state) {
-    const r0 = encoding1_0.decode(state)
-    const r1 = encoding1_1.decode(state)
+    const r0 = c.uint.decode(state)
+    const r1 = c.uint.decode(state)
+
+    return {
+      core: r0,
+      seq: r1
+    }
+  }
+}
+
+// @bee/tree.keys
+const encoding2_0 = c.array(encoding0)
+// @bee/tree.children
+const encoding2_1 = encoding2_0
+
+// @bee/tree
+const encoding2 = {
+  preencode (state, m) {
+    encoding2_0.preencode(state, m.keys)
+    encoding2_1.preencode(state, m.children)
+  },
+  encode (state, m) {
+    encoding2_0.encode(state, m.keys)
+    encoding2_1.encode(state, m.children)
+  },
+  decode (state) {
+    const r0 = encoding2_0.decode(state)
+    const r1 = encoding2_1.decode(state)
 
     return {
       keys: r0,
@@ -62,7 +83,7 @@ const encoding1 = {
 }
 
 // @bee/data
-const encoding2 = {
+const encoding3 = {
   preencode (state, m) {
     c.buffer.preencode(state, m.key)
     c.buffer.preencode(state, m.value)
@@ -83,23 +104,23 @@ const encoding2 = {
 }
 
 // @bee/block.tree
-const encoding3_3 = c.array(encoding1)
+const encoding4_3 = c.array(encoding2)
 // @bee/block.data
-const encoding3_4 = c.array(encoding2)
+const encoding4_4 = c.array(encoding3)
 // @bee/block.cores
-const encoding3_5 = c.array(c.fixed32)
+const encoding4_5 = c.array(c.fixed32)
 
 // @bee/block
-const encoding3 = {
+const encoding4 = {
   preencode (state, m) {
     c.uint.preencode(state, m.type)
     c.uint.preencode(state, m.batch)
     c.uint.preencode(state, m.pointer)
     state.end++ // max flag is 4 so always one byte
 
-    if (m.tree) encoding3_3.preencode(state, m.tree)
-    if (m.data) encoding3_4.preencode(state, m.data)
-    if (m.cores) encoding3_5.preencode(state, m.cores)
+    if (m.tree) encoding4_3.preencode(state, m.tree)
+    if (m.data) encoding4_4.preencode(state, m.data)
+    if (m.cores) encoding4_5.preencode(state, m.cores)
   },
   encode (state, m) {
     const flags =
@@ -112,9 +133,9 @@ const encoding3 = {
     c.uint.encode(state, m.pointer)
     c.uint.encode(state, flags)
 
-    if (m.tree) encoding3_3.encode(state, m.tree)
-    if (m.data) encoding3_4.encode(state, m.data)
-    if (m.cores) encoding3_5.encode(state, m.cores)
+    if (m.tree) encoding4_3.encode(state, m.tree)
+    if (m.data) encoding4_4.encode(state, m.data)
+    if (m.cores) encoding4_5.encode(state, m.cores)
   },
   decode (state) {
     const r0 = c.uint.decode(state)
@@ -126,9 +147,9 @@ const encoding3 = {
       type: r0,
       batch: r1,
       pointer: r2,
-      tree: (flags & 1) !== 0 ? encoding3_3.decode(state) : null,
-      data: (flags & 2) !== 0 ? encoding3_4.decode(state) : null,
-      cores: (flags & 4) !== 0 ? encoding3_5.decode(state) : null
+      tree: (flags & 1) !== 0 ? encoding4_3.decode(state) : null,
+      data: (flags & 2) !== 0 ? encoding4_4.decode(state) : null,
+      cores: (flags & 4) !== 0 ? encoding4_5.decode(state) : null
     }
   }
 }
@@ -155,10 +176,11 @@ function getEnum (name) {
 
 function getEncoding (name) {
   switch (name) {
-    case '@bee/pointer': return encoding0
-    case '@bee/tree': return encoding1
-    case '@bee/data': return encoding2
-    case '@bee/block': return encoding3
+    case '@bee/tree-pointer': return encoding0
+    case '@bee/block-pointer': return encoding1
+    case '@bee/tree': return encoding2
+    case '@bee/data': return encoding3
+    case '@bee/block': return encoding4
     default: throw new Error('Encoder not found ' + name)
   }
 }

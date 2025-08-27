@@ -4,7 +4,7 @@ const schema = Hyperschema.from('./spec/hyperschema', { versioned: false })
 const bee = schema.namespace('bee')
 
 bee.register({
-  name: 'pointer',
+  name: 'tree-pointer',
   compact: true,
   fields: [
     {
@@ -26,18 +26,35 @@ bee.register({
 })
 
 bee.register({
+  name: 'block-pointer',
+  compact: true,
+  fields: [
+    {
+      name: 'core',
+      type: 'uint',
+      required: true
+    },
+    {
+      name: 'seq',
+      type: 'uint',
+      required: true
+    }
+  ]
+})
+
+bee.register({
   name: 'tree',
   compact: true,
   fields: [
     {
       name: 'keys',
-      type: '@bee/pointer',
+      type: '@bee/tree-pointer',
       array: true,
       required: true
     },
     {
       name: 'children',
-      type: '@bee/pointer',
+      type: '@bee/tree-pointer',
       array: true,
       required: true
     }

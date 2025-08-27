@@ -2,7 +2,7 @@
   "version": 1,
   "schema": [
     {
-      "name": "pointer",
+      "name": "tree-pointer",
       "namespace": "bee",
       "compact": true,
       "flagsPosition": -1,
@@ -28,6 +28,26 @@
       ]
     },
     {
+      "name": "block-pointer",
+      "namespace": "bee",
+      "compact": true,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "core",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "seq",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        }
+      ]
+    },
+    {
       "name": "tree",
       "namespace": "bee",
       "compact": true,
@@ -37,14 +57,14 @@
           "name": "keys",
           "required": true,
           "array": true,
-          "type": "@bee/pointer",
+          "type": "@bee/tree-pointer",
           "version": 1
         },
         {
           "name": "children",
           "required": true,
           "array": true,
-          "type": "@bee/pointer",
+          "type": "@bee/tree-pointer",
           "version": 1
         }
       ]
