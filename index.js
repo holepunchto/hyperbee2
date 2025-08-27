@@ -27,6 +27,12 @@ class Hyperbee {
     this.ready().catch(noop)
   }
 
+  head () {
+    if (!this.root) return null
+    if (this.root === EMPTY) return { length: 0, key: this.context.core.key }
+    return { length: this.root.seq + 1, key: this.root.context.core.key }
+  }
+
   get core () {
     return this.context.core
   }
