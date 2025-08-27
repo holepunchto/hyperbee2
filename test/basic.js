@@ -1,6 +1,6 @@
 const test = require('brittle')
 const b4a = require('b4a')
-const { create } = require('./helpers')
+const { create, replicate } = require('./helpers')
 
 test('basic', async function (t) {
   const db = await create(t)
@@ -39,6 +39,28 @@ test('100 keys', async function (t) {
   t.alike(actual, expected)
 })
 
+test('100 keys reversed', async function (t) {
+  const db = await create(t)
+
+  const expected = []
+  for (let i = 0; i < 100; i++) {
+    const w = db.write()
+    const k = b4a.from('' + i)
+    expected.push(k)
+    w.tryPut(k, k)
+    await w.flush()
+  }
+
+  expected.sort((a, b) => -b4a.compare(a, b))
+  const actual = []
+
+  for await (const data of db.createReadStream({ reverse: true })) {
+    actual.push(data.key)
+  }
+
+  t.alike(actual, expected)
+})
+
 test('1000 keys in 10 batches', async function (t) {
   const db = await create(t)
 
@@ -64,6 +86,30 @@ test('1000 keys in 10 batches', async function (t) {
   }
 
   t.alike(actual, expected)
+})
+
+test('basic cross link', async function (t) {
+  const db = await create(t)
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('hello'), b4a.from('world'))
+    w.tryPut(b4a.from('hej'), b4a.from('verden'))
+    await w.flush()
+  }
+
+  const db2 = await create(t)
+
+  replicate(t, db, db2)
+
+  {
+    const w = db2.write(db.head())
+    w.tryPut(b4a.from('hej'), b4a.from('verden*'))
+    await w.flush()
+  }
+
+  t.alike((await db2.get(b4a.from('hej')))?.value, b4a.from('verden*'))
+  t.alike((await db2.get(b4a.from('hello')))?.value, b4a.from('world'))
 })
 
 test('basic fuzz (2k rounds)', async function (t) {
