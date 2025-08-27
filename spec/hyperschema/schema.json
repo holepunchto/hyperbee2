@@ -108,7 +108,7 @@
           "version": 1
         },
         {
-          "name": "pointer",
+          "name": "checkpoint",
           "required": true,
           "type": "uint",
           "version": 1

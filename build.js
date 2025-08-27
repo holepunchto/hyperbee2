@@ -92,7 +92,7 @@ bee.register({
       required: true
     },
     {
-      name: 'pointer',
+      name: 'checkpoint',
       type: 'uint',
       required: true
     },

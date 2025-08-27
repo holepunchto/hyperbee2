@@ -115,7 +115,7 @@ const encoding4 = {
   preencode (state, m) {
     c.uint.preencode(state, m.type)
     c.uint.preencode(state, m.batch)
-    c.uint.preencode(state, m.pointer)
+    c.uint.preencode(state, m.checkpoint)
     state.end++ // max flag is 4 so always one byte
 
     if (m.tree) encoding4_3.preencode(state, m.tree)
@@ -130,7 +130,7 @@ const encoding4 = {
 
     c.uint.encode(state, m.type)
     c.uint.encode(state, m.batch)
-    c.uint.encode(state, m.pointer)
+    c.uint.encode(state, m.checkpoint)
     c.uint.encode(state, flags)
 
     if (m.tree) encoding4_3.encode(state, m.tree)
@@ -146,7 +146,7 @@ const encoding4 = {
     return {
       type: r0,
       batch: r1,
-      pointer: r2,
+      checkpoint: r2,
       tree: (flags & 1) !== 0 ? encoding4_3.decode(state) : null,
       data: (flags & 2) !== 0 ? encoding4_4.decode(state) : null,
       cores: (flags & 4) !== 0 ? encoding4_5.decode(state) : null
