@@ -97,6 +97,10 @@ bee.register({
       required: true
     },
     {
+      name: 'previous',
+      type: '@bee/block-pointer'
+    },
+    {
       name: 'tree',
       type: '@bee/tree',
       array: true

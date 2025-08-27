@@ -13,6 +13,7 @@ class Hyperbee {
       maxCacheSize = 4096,
       cache = new NodeCache(maxCacheSize),
       root = null,
+      activeRequests = [],
       view = false
     } = options
 
@@ -20,6 +21,7 @@ class Hyperbee {
     this.root = root
     this.cache = cache
     this.context = context
+    this.activeRequests = activeRequests
     this.view = view
 
     this.ready().catch(noop)
@@ -69,6 +71,7 @@ class Hyperbee {
   }
 
   async close () {
+    if (this.activeRequests.length) this.core.clearRequests(this.activeRequests)
     if (!this.view) await this.store.close()
   }
 
@@ -96,8 +99,8 @@ class Hyperbee {
       return ptr.value
     }
 
-    const block = await ptr.context.getBlock(ptr.seq, ptr.core)
-    const context = await ptr.context.getContext(ptr.core)
+    const block = await ptr.context.getBlock(ptr.seq, ptr.core, this.activeRequests)
+    const context = await ptr.context.getContext(ptr.core, this.activeRequests)
     const tree = block.tree[ptr.offset]
 
     const keys = new Array(tree.keys.length)
@@ -105,7 +108,7 @@ class Hyperbee {
 
     for (let i = 0; i < keys.length; i++) {
       const k = tree.keys[i]
-      const blk = k.seq === ptr.seq && k.core === ptr.core ? block : await context.getBlock(k.seq, k.core)
+      const blk = k.seq === ptr.seq && k.core === ptr.core ? block : await context.getBlock(k.seq, k.core, this.activeRequests)
       const d = blk.data[k.offset]
       keys[i] = new DataPointer(context, k.core, k.seq, k.offset, false, d.key, d.value)
     }

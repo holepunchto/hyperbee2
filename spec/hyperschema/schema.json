@@ -114,6 +114,11 @@
           "version": 1
         },
         {
+          "name": "previous",
+          "type": "@bee/block-pointer",
+          "version": 1
+        },
+        {
           "name": "tree",
           "array": true,
           "type": "@bee/tree",

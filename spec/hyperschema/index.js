@@ -104,11 +104,11 @@ const encoding3 = {
 }
 
 // @bee/block.tree
-const encoding4_3 = c.array(encoding2)
+const encoding4_4 = c.array(encoding2)
 // @bee/block.data
-const encoding4_4 = c.array(encoding3)
+const encoding4_5 = c.array(encoding3)
 // @bee/block.cores
-const encoding4_5 = c.array(c.fixed32)
+const encoding4_6 = c.array(c.fixed32)
 
 // @bee/block
 const encoding4 = {
@@ -116,26 +116,29 @@ const encoding4 = {
     c.uint.preencode(state, m.type)
     c.uint.preencode(state, m.batch)
     c.uint.preencode(state, m.checkpoint)
-    state.end++ // max flag is 4 so always one byte
+    state.end++ // max flag is 8 so always one byte
 
-    if (m.tree) encoding4_3.preencode(state, m.tree)
-    if (m.data) encoding4_4.preencode(state, m.data)
-    if (m.cores) encoding4_5.preencode(state, m.cores)
+    if (m.previous) encoding1.preencode(state, m.previous)
+    if (m.tree) encoding4_4.preencode(state, m.tree)
+    if (m.data) encoding4_5.preencode(state, m.data)
+    if (m.cores) encoding4_6.preencode(state, m.cores)
   },
   encode (state, m) {
     const flags =
-      (m.tree ? 1 : 0) |
-      (m.data ? 2 : 0) |
-      (m.cores ? 4 : 0)
+      (m.previous ? 1 : 0) |
+      (m.tree ? 2 : 0) |
+      (m.data ? 4 : 0) |
+      (m.cores ? 8 : 0)
 
     c.uint.encode(state, m.type)
     c.uint.encode(state, m.batch)
     c.uint.encode(state, m.checkpoint)
     c.uint.encode(state, flags)
 
-    if (m.tree) encoding4_3.encode(state, m.tree)
-    if (m.data) encoding4_4.encode(state, m.data)
-    if (m.cores) encoding4_5.encode(state, m.cores)
+    if (m.previous) encoding1.encode(state, m.previous)
+    if (m.tree) encoding4_4.encode(state, m.tree)
+    if (m.data) encoding4_5.encode(state, m.data)
+    if (m.cores) encoding4_6.encode(state, m.cores)
   },
   decode (state) {
     const r0 = c.uint.decode(state)
@@ -147,9 +150,10 @@ const encoding4 = {
       type: r0,
       batch: r1,
       checkpoint: r2,
-      tree: (flags & 1) !== 0 ? encoding4_3.decode(state) : null,
-      data: (flags & 2) !== 0 ? encoding4_4.decode(state) : null,
-      cores: (flags & 4) !== 0 ? encoding4_5.decode(state) : null
+      previous: (flags & 1) !== 0 ? encoding1.decode(state) : null,
+      tree: (flags & 2) !== 0 ? encoding4_4.decode(state) : null,
+      data: (flags & 4) !== 0 ? encoding4_5.decode(state) : null,
+      cores: (flags & 8) !== 0 ? encoding4_6.decode(state) : null
     }
   }
 }
