@@ -1,4 +1,5 @@
 const b4a = require('b4a')
+const Hypercore = require('hypercore')
 const KeyValueStream = require('./lib/key-value-stream.js')
 const NodeCache = require('./lib/cache.js')
 const WriteBatch = require('./lib/write.js')
@@ -81,7 +82,7 @@ class Hyperbee {
   }
 
   async close () {
-    if (this.activeRequests.length) this.core.clearRequests(this.activeRequests)
+    if (this.activeRequests.length) Hypercore.clearRequests(this.activeRequests)
     if (!this.view) await this.store.close()
   }
 
@@ -103,14 +104,14 @@ class Hyperbee {
     return ptr.value
   }
 
-  async inflate (ptr) {
+  async inflate (ptr, activeRequests = this.activeRequests) {
     if (ptr.value) {
       this.bump(ptr)
       return ptr.value
     }
 
-    const block = await ptr.context.getBlock(ptr.seq, ptr.core, this.activeRequests)
-    const context = await ptr.context.getContext(ptr.core, this.activeRequests)
+    const block = await ptr.context.getBlock(ptr.seq, ptr.core, activeRequests)
+    const context = await ptr.context.getContext(ptr.core, activeRequests)
     const tree = block.tree[ptr.offset]
 
     const keys = new Array(tree.keys.length)
@@ -118,7 +119,7 @@ class Hyperbee {
 
     for (let i = 0; i < keys.length; i++) {
       const k = tree.keys[i]
-      const blk = k.seq === ptr.seq && k.core === ptr.core ? block : await context.getBlock(k.seq, k.core, this.activeRequests)
+      const blk = k.seq === ptr.seq && k.core === ptr.core ? block : await context.getBlock(k.seq, k.core, activeRequests)
       const d = blk.data[k.offset]
       keys[i] = new DataPointer(context, k.core, k.seq, k.offset, false, d.key, d.value)
     }
@@ -143,12 +144,12 @@ class Hyperbee {
     this.root = root
   }
 
-  async get (key) {
+  async get (key, { activeRequests = this.activeRequests } = {}) {
     let ptr = await this._bootstrap()
     if (!ptr) return null
 
     while (true) {
-      const v = ptr.value ? this.bump(ptr) : await this.inflate(ptr)
+      const v = ptr.value ? this.bump(ptr) : await this.inflate(ptr, this.activeRequests)
 
       let s = 0
       let e = v.keys.length
