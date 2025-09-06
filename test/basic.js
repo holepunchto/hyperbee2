@@ -111,35 +111,3 @@ test('basic cross link', async function (t) {
   t.alike((await db2.get(b4a.from('hej')))?.value, b4a.from('verden*'))
   t.alike((await db2.get(b4a.from('hello')))?.value, b4a.from('world'))
 })
-
-test('basic fuzz (2k rounds)', async function (t) {
-  const db = await create(t)
-
-  const expected = new Map()
-
-  for (let i = 0; i < 2000; i++) {
-    const n = (Math.random() * 10) | 0
-    const w = db.write()
-    for (let j = 0; j < n; j++) {
-      const put = Math.random() < 0.8
-      const k = b4a.from('' + ((Math.random() * 10_000) | 0))
-      if (put) {
-        expected.set(k.toString(), k)
-        w.tryPut(k, k)
-      } else {
-        expected.delete(k.toString())
-        w.tryDelete(k)
-      }
-    }
-    await w.flush()
-  }
-
-  const sorted = [...expected.values()].sort(b4a.compare)
-  const actual = []
-
-  for await (const data of db.createReadStream()) {
-    actual.push(data.key)
-  }
-
-  t.alike(actual, sorted)
-})
