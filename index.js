@@ -9,8 +9,9 @@ const { DataPointer, TreeNode, TreeNodePointer, EMPTY } = require('./lib/tree.js
 class Hyperbee {
   constructor (store, options = {}) {
     const {
-      core = null,
-      context = new CoreContext(store, core || store.get({ name: 'bee' })),
+      key = null,
+      core = key ? store.get(key) : store.get({ key, name: 'bee' }),
+      context = new CoreContext(store, core),
       maxCacheSize = 4096,
       cache = new NodeCache(maxCacheSize),
       root = null,
