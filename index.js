@@ -40,19 +40,19 @@ class Hyperbee {
   }
 
   get opening () {
-    return this.core.opening
+    return this.store.opening
   }
 
   get opened () {
-    return this.core.opened
+    return this.store.opened
   }
 
   get closing () {
-    return this.core.closing
+    return this.store.closing
   }
 
   get closed () {
-    return this.core.closed
+    return this.store.closed
   }
 
   replicate (...opts) {
