@@ -150,7 +150,7 @@ class Hyperbee {
     if (!ptr) return null
 
     while (true) {
-      const v = ptr.value ? this.bump(ptr) : await this.inflate(ptr, this.activeRequests)
+      const v = ptr.value ? this.bump(ptr) : await this.inflate(ptr, activeRequests)
 
       let s = 0
       let e = v.keys.length
