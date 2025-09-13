@@ -43,6 +43,23 @@ bee.register({
 })
 
 bee.register({
+  name: 'batch-pointer',
+  compact: true,
+  fields: [
+    {
+      name: 'start',
+      type: 'uint',
+      required: true
+    },
+    {
+      name: 'end',
+      type: 'uint',
+      required: true
+    }
+  ]
+})
+
+bee.register({
   name: 'tree',
   compact: true,
   fields: [
@@ -87,13 +104,13 @@ bee.register({
       required: true
     },
     {
-      name: 'batch',
+      name: 'checkpoint',
       type: 'uint',
       required: true
     },
     {
-      name: 'checkpoint',
-      type: 'uint',
+      name: 'batch',
+      type: '@bee/batch-pointer',
       required: true
     },
     {

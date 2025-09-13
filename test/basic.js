@@ -111,3 +111,72 @@ test('basic cross link', async function (t) {
   t.alike((await db2.get(b4a.from('hej')))?.value, b4a.from('verden*'))
   t.alike((await db2.get(b4a.from('hello')))?.value, b4a.from('world'))
 })
+
+test('changes', async function (t) {
+  const db = await create(t)
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('1'), b4a.from('1'))
+    await w.flush()
+  }
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('2'), b4a.from('2'))
+    w.tryPut(b4a.from('3'), b4a.from('3'))
+    await w.flush()
+  }
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('4'), b4a.from('4'))
+    w.tryPut(b4a.from('5'), b4a.from('5'))
+    w.tryPut(b4a.from('6'), b4a.from('6'))
+    await w.flush()
+  }
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('4'), b4a.from('4'))
+    w.tryPut(b4a.from('5'), b4a.from('5'))
+    w.tryPut(b4a.from('6'), b4a.from('6'))
+    w.tryPut(b4a.from('7'), b4a.from('7'))
+    await w.flush()
+  }
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('4'), b4a.from('4'))
+    w.tryPut(b4a.from('5'), b4a.from('5'))
+    w.tryPut(b4a.from('6'), b4a.from('6'))
+    w.tryPut(b4a.from('7'), b4a.from('7'))
+    w.tryPut(b4a.from('8'), b4a.from('8'))
+    w.tryPut(b4a.from('9'), b4a.from('9'))
+    w.tryPut(b4a.from('10'), b4a.from('10'))
+    w.tryPut(b4a.from('11'), b4a.from('11'))
+    w.tryPut(b4a.from('12'), b4a.from('12'))
+    w.tryPut(b4a.from('13'), b4a.from('13'))
+    w.tryPut(b4a.from('14'), b4a.from('14'))
+    await w.flush()
+  }
+
+  const changes = []
+  const head = db.head()
+
+  for await (const data of db.createChangesStream()) {
+    changes.push(data)
+  }
+
+  let length = head.length
+  t.is(changes.length, 5)
+  t.alike(changes[0].head, head)
+  length -= changes[0].batch.length
+  t.alike(changes[1].head, { ...head, length })
+  length -= changes[1].batch.length
+  t.alike(changes[2].head, { ...head, length })
+  length -= changes[2].batch.length
+  t.alike(changes[3].head, { ...head, length })
+  length -= changes[4].batch.length
+  t.alike(changes[4].head, { ...head, length })
+})

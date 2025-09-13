@@ -48,6 +48,26 @@
       ]
     },
     {
+      "name": "batch-pointer",
+      "namespace": "bee",
+      "compact": true,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "start",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "end",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        }
+      ]
+    },
+    {
       "name": "tree",
       "namespace": "bee",
       "compact": true,
@@ -102,15 +122,15 @@
           "version": 1
         },
         {
-          "name": "batch",
+          "name": "checkpoint",
           "required": true,
           "type": "uint",
           "version": 1
         },
         {
-          "name": "checkpoint",
+          "name": "batch",
           "required": true,
-          "type": "uint",
+          "type": "@bee/batch-pointer",
           "version": 1
         },
         {
