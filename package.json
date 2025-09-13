@@ -13,6 +13,7 @@
     "compact-encoding": "^2.16.1",
     "hypercore": "^11.15.0",
     "hyperschema": "^1.14.0",
+    "protocol-buffers-encodings": "^1.2.0",
     "streamx": "^2.22.1"
   },
   "devDependencies": {

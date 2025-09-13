@@ -1,5 +1,4 @@
 import Hyperbee from './index.js'
-import ChangesStream from './lib/changes-stream.js'
 import Corestore from 'corestore'
 
 const b = new Hyperbee(new Corestore('./sandbox/store'))
@@ -7,30 +6,18 @@ const b = new Hyperbee(new Corestore('./sandbox/store'))
 await b.ready()
 
 if (b.core.length === 0) {
-  {
-    const w = b.write()
+  const w = b.write()
 
-    for (let i = 0; i < 10; i++) {
-      w.tryPut(Buffer.from('#' + i), Buffer.from('#' + i))
-    }
-
-    await w.flush()
+  for (let i = 0; i < 100; i++) {
+    w.tryPut(Buffer.from('#' + i), Buffer.from('#' + i))
   }
 
-  {
-    const w = b.write()
-
-    for (let i = 0; i < 10; i++) {
-      w.tryPut(Buffer.from('#' + i), Buffer.from('#' + i))
-    }
-
-    await w.flush()
-  }
+  await w.flush()
 }
 
-const c = new ChangesStream(b)
-
-c.on('data', console.log)
+for await (const data of b.createReadStream()) {
+  console.log(data.key, '-->', data.value)
+}
 
 // const c = new Hyperbee(b.store, { core: b.store.get({ name: 'bee2' }) })
 // await c.ready()
