@@ -8,7 +8,7 @@ npm install hyperbee2
 
 ## Usage
 
-``` js
+```js
 const hyperbee2 = require('hyperbee2')
 ```
 

@@ -2,6 +2,7 @@
 // Schema Version: 1
 /* eslint-disable camelcase */
 /* eslint-disable quotes */
+/* eslint-disable space-before-function-paren */
 
 const { c } = require('hyperschema/runtime')
 
@@ -12,17 +13,17 @@ let version = VERSION
 
 // @bee/tree-pointer
 const encoding0 = {
-  preencode (state, m) {
+  preencode(state, m) {
     c.uint.preencode(state, m.core)
     c.uint.preencode(state, m.seq)
     c.uint.preencode(state, m.offset)
   },
-  encode (state, m) {
+  encode(state, m) {
     c.uint.encode(state, m.core)
     c.uint.encode(state, m.seq)
     c.uint.encode(state, m.offset)
   },
-  decode (state) {
+  decode(state) {
     const r0 = c.uint.decode(state)
     const r1 = c.uint.decode(state)
     const r2 = c.uint.decode(state)
@@ -37,15 +38,15 @@ const encoding0 = {
 
 // @bee/block-pointer
 const encoding1 = {
-  preencode (state, m) {
+  preencode(state, m) {
     c.uint.preencode(state, m.core)
     c.uint.preencode(state, m.seq)
   },
-  encode (state, m) {
+  encode(state, m) {
     c.uint.encode(state, m.core)
     c.uint.encode(state, m.seq)
   },
-  decode (state) {
+  decode(state) {
     const r0 = c.uint.decode(state)
     const r1 = c.uint.decode(state)
 
@@ -58,15 +59,15 @@ const encoding1 = {
 
 // @bee/batch-pointer
 const encoding2 = {
-  preencode (state, m) {
+  preencode(state, m) {
     c.uint.preencode(state, m.start)
     c.uint.preencode(state, m.end)
   },
-  encode (state, m) {
+  encode(state, m) {
     c.uint.encode(state, m.start)
     c.uint.encode(state, m.end)
   },
-  decode (state) {
+  decode(state) {
     const r0 = c.uint.decode(state)
     const r1 = c.uint.decode(state)
 
@@ -84,15 +85,15 @@ const encoding3_1 = encoding3_0
 
 // @bee/tree
 const encoding3 = {
-  preencode (state, m) {
+  preencode(state, m) {
     encoding3_0.preencode(state, m.keys)
     encoding3_1.preencode(state, m.children)
   },
-  encode (state, m) {
+  encode(state, m) {
     encoding3_0.encode(state, m.keys)
     encoding3_1.encode(state, m.children)
   },
-  decode (state) {
+  decode(state) {
     const r0 = encoding3_0.decode(state)
     const r1 = encoding3_1.decode(state)
 
@@ -105,15 +106,15 @@ const encoding3 = {
 
 // @bee/data
 const encoding4 = {
-  preencode (state, m) {
+  preencode(state, m) {
     c.buffer.preencode(state, m.key)
     c.buffer.preencode(state, m.value)
   },
-  encode (state, m) {
+  encode(state, m) {
     c.buffer.encode(state, m.key)
     c.buffer.encode(state, m.value)
   },
-  decode (state) {
+  decode(state) {
     const r0 = c.buffer.decode(state)
     const r1 = c.buffer.decode(state)
 
@@ -133,7 +134,7 @@ const encoding5_6 = c.array(c.fixed32)
 
 // @bee/block
 const encoding5 = {
-  preencode (state, m) {
+  preencode(state, m) {
     c.uint.preencode(state, m.type)
     c.uint.preencode(state, m.checkpoint)
     encoding2.preencode(state, m.batch)
@@ -144,7 +145,7 @@ const encoding5 = {
     if (m.data) encoding5_5.preencode(state, m.data)
     if (m.cores) encoding5_6.preencode(state, m.cores)
   },
-  encode (state, m) {
+  encode(state, m) {
     const flags =
       (m.previous ? 1 : 0) |
       (m.tree ? 2 : 0) |
@@ -161,7 +162,7 @@ const encoding5 = {
     if (m.data) encoding5_5.encode(state, m.data)
     if (m.cores) encoding5_6.encode(state, m.cores)
   },
-  decode (state) {
+  decode(state) {
     const r0 = c.uint.decode(state)
     const r1 = c.uint.decode(state)
     const r2 = encoding2.decode(state)
@@ -179,50 +180,58 @@ const encoding5 = {
   }
 }
 
-function setVersion (v) {
+function setVersion(v) {
   version = v
 }
 
-function encode (name, value, v = VERSION) {
+function encode(name, value, v = VERSION) {
   version = v
   return c.encode(getEncoding(name), value)
 }
 
-function decode (name, buffer, v = VERSION) {
+function decode(name, buffer, v = VERSION) {
   version = v
   return c.decode(getEncoding(name), buffer)
 }
 
-function getEnum (name) {
+function getEnum(name) {
   switch (name) {
-    default: throw new Error('Enum not found ' + name)
+    default:
+      throw new Error('Enum not found ' + name)
   }
 }
 
-function getEncoding (name) {
+function getEncoding(name) {
   switch (name) {
-    case '@bee/tree-pointer': return encoding0
-    case '@bee/block-pointer': return encoding1
-    case '@bee/batch-pointer': return encoding2
-    case '@bee/tree': return encoding3
-    case '@bee/data': return encoding4
-    case '@bee/block': return encoding5
-    default: throw new Error('Encoder not found ' + name)
+    case '@bee/tree-pointer':
+      return encoding0
+    case '@bee/block-pointer':
+      return encoding1
+    case '@bee/batch-pointer':
+      return encoding2
+    case '@bee/tree':
+      return encoding3
+    case '@bee/data':
+      return encoding4
+    case '@bee/block':
+      return encoding5
+    default:
+      throw new Error('Encoder not found ' + name)
   }
 }
 
-function getStruct (name, v = VERSION) {
+function getStruct(name, v = VERSION) {
   const enc = getEncoding(name)
   return {
-    preencode (state, m) {
+    preencode(state, m) {
       version = v
       enc.preencode(state, m)
     },
-    encode (state, m) {
+    encode(state, m) {
       version = v
       enc.encode(state, m)
     },
-    decode (state) {
+    decode(state) {
       version = v
       return enc.decode(state)
     }
@@ -231,4 +240,13 @@ function getStruct (name, v = VERSION) {
 
 const resolveStruct = getStruct // compat
 
-module.exports = { resolveStruct, getStruct, getEnum, getEncoding, encode, decode, setVersion, version }
+module.exports = {
+  resolveStruct,
+  getStruct,
+  getEnum,
+  getEncoding,
+  encode,
+  decode,
+  setVersion,
+  version
+}

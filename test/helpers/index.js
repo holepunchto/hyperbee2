@@ -4,14 +4,14 @@ const Corestore = require('corestore')
 exports.create = create
 exports.replicate = replicate
 
-async function replicate (t, a, b) {
+async function replicate(t, a, b) {
   const s1 = a.replicate(true)
   const s2 = b.replicate(false)
 
   s1.pipe(s2).pipe(s1)
 
-  const closed1 = new Promise(resolve => s1.once('close', resolve))
-  const closed2 = new Promise(resolve => s2.once('close', resolve))
+  const closed1 = new Promise((resolve) => s1.once('close', resolve))
+  const closed2 = new Promise((resolve) => s2.once('close', resolve))
 
   s1.on('error', () => {})
   s2.on('error', () => {})
@@ -24,7 +24,7 @@ async function replicate (t, a, b) {
   })
 }
 
-async function create (t, opts) {
+async function create(t, opts) {
   const store = new Corestore(await t.tmp())
   const db = new Bee(store, opts)
   t.teardown(() => db.close())

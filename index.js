@@ -5,10 +5,15 @@ const ChangesStream = require('./lib/changes-stream.js')
 const NodeCache = require('./lib/cache.js')
 const WriteBatch = require('./lib/write.js')
 const CoreContext = require('./lib/context.js')
-const { DataPointer, TreeNode, TreeNodePointer, EMPTY } = require('./lib/tree.js')
+const {
+  DataPointer,
+  TreeNode,
+  TreeNodePointer,
+  EMPTY
+} = require('./lib/tree.js')
 
 class Hyperbee {
-  constructor (store, options = {}) {
+  constructor(store, options = {}) {
     const {
       key = null,
       core = key ? store.get(key) : store.get({ key, name: 'bee' }),
@@ -30,87 +35,113 @@ class Hyperbee {
     this.ready().catch(noop)
   }
 
-  head () {
+  head() {
     if (!this.root) return null
     if (this.root === EMPTY) return { length: 0, key: this.context.core.key }
     return { length: this.root.seq + 1, key: this.root.context.core.key }
   }
 
-  get core () {
+  get core() {
     return this.context.core
   }
 
-  get opening () {
+  get opening() {
     return this.store.opening
   }
 
-  get opened () {
+  get opened() {
     return this.store.opened
   }
 
-  get closing () {
+  get closing() {
     return this.store.closing
   }
 
-  get closed () {
+  get closed() {
     return this.store.closed
   }
 
-  replicate (...opts) {
+  replicate(...opts) {
     return this.store.replicate(...opts)
   }
 
-  checkout ({ length = this.core.length, key = null } = {}) {
+  _makeView(root, writable, rollback) {
+    return new Hyperbee(this.store, {
+      context: this.context,
+      cache: this.cache,
+      root,
+      view: true,
+      writable,
+      rollback
+    })
+  }
+
+  checkout({ length = this.core.length, key = null, writable = false } = {}) {
     const context = key ? this.context.getContextByKey(key) : this.context
-    const root = length === 0 ? EMPTY : new TreeNodePointer(context, 0, length - 1, 0, false, null)
-    return new Hyperbee(this.store, { context: this.context, cache: this.cache, root, view: true })
+    const root =
+      length === 0
+        ? EMPTY
+        : new TreeNodePointer(context, 0, length - 1, 0, false, null)
+    return this._makeView(root, writable, 0)
   }
 
-  snapshot () {
-    return new Hyperbee(this.store, { context: this.context, cache: this.cache, root: this.root, view: true })
+  snapshot() {
+    return this._makeView(this.root, false, 0)
   }
 
-  write (opts) {
+  rollback(n) {
+    return this._makeView(this.root, true, n)
+  }
+
+  write(opts) {
     return new WriteBatch(this, opts)
   }
 
-  async ready () {
+  async ready() {
     if (!this.core.opened) await this.core.ready()
     if (this.root) return
 
-    this.root = this.context.core.length === 0
-      ? EMPTY
-      : new TreeNodePointer(this.context, 0, this.core.length - 1, 0, false, null)
+    this.root =
+      this.context.core.length === 0
+        ? EMPTY
+        : new TreeNodePointer(
+            this.context,
+            0,
+            this.core.length - 1,
+            0,
+            false,
+            null
+          )
   }
 
-  async close () {
+  async close() {
     if (this.activeRequests.length) Hypercore.clearRequests(this.activeRequests)
     if (!this.view) await this.store.close()
   }
 
-  createReadStream (range) {
+  createReadStream(range) {
     return new KeyValueStream(this, range)
   }
 
-  createChangesStream (options) {
+  createChangesStream(options) {
     return new ChangesStream(this, options)
   }
 
-  async peek (range = {}) {
+  async peek(range = {}) {
     const rs = new KeyValueStream(this, { ...range, limit: 1 })
     let entry = null
     for await (const data of rs) entry = data
     return entry
   }
 
-  bump (ptr) {
+  bump(ptr) {
     if (ptr.changed) return ptr.value
     this.cache.bump(ptr)
     this.cache.gc()
     return ptr.value
   }
 
-  async inflate (ptr, activeRequests = this.activeRequests) {
+  async inflate(ptr, activeRequests = this.activeRequests) {
     if (ptr.value) {
       this.bump(ptr)
       return ptr.value
@@ -125,14 +156,32 @@ class Hyperbee {
 
     for (let i = 0; i < keys.length; i++) {
       const k = tree.keys[i]
-      const blk = k.seq === ptr.seq && k.core === ptr.core ? block : await context.getBlock(k.seq, k.core, activeRequests)
+      const blk =
+        k.seq === ptr.seq && k.core === ptr.core
+          ? block
+          : await context.getBlock(k.seq, k.core, activeRequests)
       const d = blk.data[k.offset]
-      keys[i] = new DataPointer(context, k.core, k.seq, k.offset, false, d.key, d.value)
+      keys[i] = new DataPointer(
+        context,
+        k.core,
+        k.seq,
+        k.offset,
+        false,
+        d.key,
+        d.value
+      )
     }
 
     for (let i = 0; i < children.length; i++) {
       const c = tree.children[i]
-      children[i] = new TreeNodePointer(context, c.core, c.seq, c.offset, false, null)
+      children[i] = new TreeNodePointer(
+        context,
+        c.core,
+        c.seq,
+        c.offset,
+        false,
+        null
+      )
     }
 
     ptr.value = new TreeNode(keys, children)
@@ -141,21 +190,23 @@ class Hyperbee {
     return ptr.value
   }
 
-  async _bootstrap () {
+  async _bootstrap() {
     await this.ready()
     return this.root === EMPTY ? null : this.root
   }
 
-  update (root = null) {
+  update(root = null) {
     this.root = root
   }
 
-  async get (key, { activeRequests = this.activeRequests } = {}) {
+  async get(key, { activeRequests = this.activeRequests } = {}) {
     let ptr = await this._bootstrap()
     if (!ptr) return null
 
     while (true) {
-      const v = ptr.value ? this.bump(ptr) : await this.inflate(ptr, activeRequests)
+      const v = ptr.value
+        ? this.bump(ptr)
+        : await this.inflate(ptr, activeRequests)
 
       let s = 0
       let e = v.keys.length
@@ -183,4 +234,4 @@ class Hyperbee {
 
 module.exports = Hyperbee
 
-function noop () {}
+function noop() {}

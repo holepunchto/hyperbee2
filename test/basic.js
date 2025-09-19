@@ -71,7 +71,7 @@ test('1000 keys in 10 batches', async function (t) {
   for (let i = 0; i < 10; i++) {
     const w = db.write()
     for (let j = 0; j < 100; j++) {
-      const k = b4a.from('' + (n++))
+      const k = b4a.from('' + n++)
       expected.push(k)
       w.tryPut(k, k)
     }
