@@ -5,12 +5,7 @@ const ChangesStream = require('./lib/changes-stream.js')
 const NodeCache = require('./lib/cache.js')
 const WriteBatch = require('./lib/write.js')
 const CoreContext = require('./lib/context.js')
-const {
-  DataPointer,
-  TreeNode,
-  TreeNodePointer,
-  EMPTY
-} = require('./lib/tree.js')
+const { DataPointer, TreeNode, TreeNodePointer, EMPTY } = require('./lib/tree.js')
 
 class Hyperbee {
   constructor(store, options = {}) {
@@ -78,10 +73,7 @@ class Hyperbee {
 
   checkout({ length = this.core.length, key = null, writable = false } = {}) {
     const context = key ? this.context.getContextByKey(key) : this.context
-    const root =
-      length === 0
-        ? EMPTY
-        : new TreeNodePointer(context, 0, length - 1, 0, false, null)
+    const root = length === 0 ? EMPTY : new TreeNodePointer(context, 0, length - 1, 0, false, null)
     return this._makeView(root, writable, 0)
   }
 
@@ -104,14 +96,7 @@ class Hyperbee {
     this.root =
       this.context.core.length === 0
         ? EMPTY
-        : new TreeNodePointer(
-            this.context,
-            0,
-            this.core.length - 1,
-            0,
-            false,
-            null
-          )
+        : new TreeNodePointer(this.context, 0, this.core.length - 1, 0, false, null)
   }
 
   async close() {
@@ -161,27 +146,12 @@ class Hyperbee {
           ? block
           : await context.getBlock(k.seq, k.core, activeRequests)
       const d = blk.data[k.offset]
-      keys[i] = new DataPointer(
-        context,
-        k.core,
-        k.seq,
-        k.offset,
-        false,
-        d.key,
-        d.value
-      )
+      keys[i] = new DataPointer(context, k.core, k.seq, k.offset, false, d.key, d.value)
     }
 
     for (let i = 0; i < children.length; i++) {
       const c = tree.children[i]
-      children[i] = new TreeNodePointer(
-        context,
-        c.core,
-        c.seq,
-        c.offset,
-        false,
-        null
-      )
+      children[i] = new TreeNodePointer(context, c.core, c.seq, c.offset, false, null)
     }
 
     ptr.value = new TreeNode(keys, children)
@@ -204,9 +174,7 @@ class Hyperbee {
     if (!ptr) return null
 
     while (true) {
-      const v = ptr.value
-        ? this.bump(ptr)
-        : await this.inflate(ptr, activeRequests)
+      const v = ptr.value ? this.bump(ptr) : await this.inflate(ptr, activeRequests)
 
       let s = 0
       let e = v.keys.length

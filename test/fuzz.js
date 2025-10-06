@@ -401,12 +401,8 @@ test('random fuzz (2k rounds)', async function (t) {
 
     let s = 'const db = await create(t)\n\n'
 
-    s +=
-      'const keys = ' +
-      format(sorted.map((x) => b4a.toString(x))) +
-      '.map(x => b4a.from(x))\n\n'
-    s +=
-      'const expected = ' + format(expected.map((x) => b4a.toString(x))) + '\n'
+    s += 'const keys = ' + format(sorted.map((x) => b4a.toString(x))) + '.map(x => b4a.from(x))\n\n'
+    s += 'const expected = ' + format(expected.map((x) => b4a.toString(x))) + '\n'
 
     s += '\n'
     s += 'const w = db.write()\n'
@@ -414,22 +410,10 @@ test('random fuzz (2k rounds)', async function (t) {
     s += 'await w.flush()\n'
     s += '\n'
     s += 'const query = {\n'
-    s +=
-      '  gte: ' +
-      (opts.gte ? "b4a.from('" + b4a.toString(opts.gte) + "')" : 'null') +
-      ',\n'
-    s +=
-      '  gt: ' +
-      (opts.gt ? "b4a.from('" + b4a.toString(opts.gt) + "')" : 'null') +
-      ',\n'
-    s +=
-      '  lte: ' +
-      (opts.lte ? "b4a.from('" + b4a.toString(opts.lte) + "')" : 'null') +
-      ',\n'
-    s +=
-      '  lt: ' +
-      (opts.lt ? "b4a.from('" + b4a.toString(opts.lt) + "')" : 'null') +
-      ',\n'
+    s += '  gte: ' + (opts.gte ? "b4a.from('" + b4a.toString(opts.gte) + "')" : 'null') + ',\n'
+    s += '  gt: ' + (opts.gt ? "b4a.from('" + b4a.toString(opts.gt) + "')" : 'null') + ',\n'
+    s += '  lte: ' + (opts.lte ? "b4a.from('" + b4a.toString(opts.lte) + "')" : 'null') + ',\n'
+    s += '  lt: ' + (opts.lt ? "b4a.from('" + b4a.toString(opts.lt) + "')" : 'null') + ',\n'
     s += '  reverse: ' + !!opts.reverse + '\n'
     s += '}\n\n'
 

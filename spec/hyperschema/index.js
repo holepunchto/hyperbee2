@@ -146,11 +146,7 @@ const encoding5 = {
     if (m.cores) encoding5_6.preencode(state, m.cores)
   },
   encode(state, m) {
-    const flags =
-      (m.previous ? 1 : 0) |
-      (m.tree ? 2 : 0) |
-      (m.data ? 4 : 0) |
-      (m.cores ? 8 : 0)
+    const flags = (m.previous ? 1 : 0) | (m.tree ? 2 : 0) | (m.data ? 4 : 0) | (m.cores ? 8 : 0)
 
     c.uint.encode(state, m.type)
     c.uint.encode(state, m.checkpoint)
