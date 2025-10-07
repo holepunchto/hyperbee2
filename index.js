@@ -17,7 +17,9 @@ class Hyperbee {
       cache = new NodeCache(maxCacheSize),
       root = null,
       activeRequests = [],
-      view = false
+      view = false,
+      writable = true,
+      unbatch = 0
     } = options
 
     this.store = store
@@ -26,6 +28,8 @@ class Hyperbee {
     this.context = context
     this.activeRequests = activeRequests
     this.view = view
+    this.writable = writable
+    this.unbatch = unbatch
 
     this.ready().catch(noop)
   }
@@ -60,14 +64,14 @@ class Hyperbee {
     return this.store.replicate(...opts)
   }
 
-  _makeView(root, writable, rollback) {
+  _makeView(root, writable, unbatch) {
     return new Hyperbee(this.store, {
       context: this.context,
       cache: this.cache,
       root,
       view: true,
       writable,
-      rollback
+      unbatch
     })
   }
 
@@ -81,11 +85,12 @@ class Hyperbee {
     return this._makeView(this.root, false, 0)
   }
 
-  rollback(n) {
+  undo(n) {
     return this._makeView(this.root, true, n)
   }
 
   write(opts) {
+    if (!this.writable) throw new Error('Not writable')
     return new WriteBatch(this, opts)
   }
 
@@ -160,17 +165,47 @@ class Hyperbee {
     return ptr.value
   }
 
-  async _bootstrap() {
-    await this.ready()
+  async bootstrap(activeRequests = this.activeRequests) {
+    if (!this.root) await this.ready()
+    if (this.unbatch) await this._rollback(activeRequests)
     return this.root === EMPTY ? null : this.root
+  }
+
+  async _rollback(activeRequests) {
+    const expected = this.unbatch
+
+    let n = expected
+    let length = this.root === EMPTY ? 0 : this.root.seq + 1
+    let context = this.context
+
+    while (n > 0 && length > 0 && expected === this.unbatch) {
+      const seq = length - 1
+      const blk = await context.getBlock(seq, 0, activeRequests)
+
+      if (!blk.previous) {
+        length = 0
+        break
+      }
+
+      context = await context.getContext(blk.previous.core, activeRequests)
+      length = blk.previous.seq + 1
+      n--
+    }
+
+    if (expected === this.unbatch) {
+      this.context = context
+      this.root = length === 0 ? EMPTY : new TreeNodePointer(context, 0, length - 1, 0, false, null)
+      this.unbatch = 0
+    }
   }
 
   update(root = null) {
     this.root = root
+    this.unbatch = 0
   }
 
   async get(key, { activeRequests = this.activeRequests } = {}) {
-    let ptr = await this._bootstrap()
+    let ptr = await this.bootstrap(activeRequests)
     if (!ptr) return null
 
     while (true) {
