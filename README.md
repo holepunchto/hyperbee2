@@ -1,7 +1,5 @@
 # hyperbee2
 
-WIP - nothing to see here
-
 ```
 npm install hyperbee2
 ```
@@ -9,7 +7,11 @@ npm install hyperbee2
 ## Usage
 
 ```js
-const hyperbee2 = require('hyperbee2')
+const Hyperbee2 = require('hyperbee2')
+
+const db = new Hyperbee2(store)
+
+// see tests for more
 ```
 
 ## License
