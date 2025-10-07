@@ -9,6 +9,7 @@ async function runTests() {
 
   await import('./basic.js')
   await import('./fuzz.js')
+  await import('./undo.js')
 
   test.resume()
 }
