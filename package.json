@@ -3,6 +3,10 @@
   "version": "0.0.0",
   "description": "btree",
   "main": "index.js",
+  "files": [
+    "index.js",
+    "lib/*.js"
+  ],
   "scripts": {
     "format": "prettier . --write",
     "test": "prettier . --check && node test/all.js",
