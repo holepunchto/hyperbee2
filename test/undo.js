@@ -57,3 +57,64 @@ test('undo', async function (t) {
     t.alike(await u1.get(b4a.from('2')), null)
   }
 })
+
+test('undo and write', async function (t) {
+  const db = await create(t)
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('1'), b4a.from('1'))
+    await w.flush()
+  }
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('2'), b4a.from('2'))
+    w.tryPut(b4a.from('1'), b4a.from('2'))
+    await w.flush()
+  }
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('4'), b4a.from('4'))
+    w.tryPut(b4a.from('5'), b4a.from('5'))
+    w.tryPut(b4a.from('1'), b4a.from('3'))
+    await w.flush()
+  }
+
+  const u = db.undo(1)
+
+  {
+    const all = []
+
+    for await (const { key, value } of u.createReadStream()) {
+      all.push({ key, value })
+    }
+
+    t.alike(all, [
+      { key: b4a.from('1'), value: b4a.from('2') },
+      { key: b4a.from('2'), value: b4a.from('2') }
+    ])
+  }
+
+  {
+    const w = u.write()
+    w.tryPut(b4a.from('0'), b4a.from('0'))
+    w.tryPut(b4a.from('2'), b4a.from('2*'))
+    await w.flush()
+  }
+
+  {
+    const all = []
+
+    for await (const { key, value } of u.createReadStream()) {
+      all.push({ key, value })
+    }
+
+    t.alike(all, [
+      { key: b4a.from('0'), value: b4a.from('0') },
+      { key: b4a.from('1'), value: b4a.from('2') },
+      { key: b4a.from('2'), value: b4a.from('2*') }
+    ])
+  }
+})
