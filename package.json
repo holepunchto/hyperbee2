@@ -5,7 +5,8 @@
   "main": "index.js",
   "files": [
     "index.js",
-    "lib/*.js"
+    "lib/*.js",
+    "spec"
   ],
   "scripts": {
     "format": "prettier . --write",
