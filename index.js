@@ -12,7 +12,7 @@ class Hyperbee {
     const {
       key = null,
       core = key ? store.get(key) : store.get({ key, name: 'bee' }),
-      context = new CoreContext(store, core),
+      context = new CoreContext(store, core, core),
       maxCacheSize = 4096,
       cache = new NodeCache(maxCacheSize),
       root = null,
@@ -64,9 +64,9 @@ class Hyperbee {
     return this.store.replicate(...opts)
   }
 
-  _makeView(root, writable, unbatch) {
+  _makeView(context, root, writable, unbatch) {
     return new Hyperbee(this.store, {
-      context: this.context,
+      context,
       cache: this.cache,
       root,
       view: true,
@@ -78,15 +78,15 @@ class Hyperbee {
   checkout({ length = this.core.length, key = null, writable = false } = {}) {
     const context = key ? this.context.getContextByKey(key) : this.context
     const root = length === 0 ? EMPTY : new TreeNodePointer(context, 0, length - 1, 0, false, null)
-    return this._makeView(root, writable, 0)
+    return this._makeView(context, root, writable, 0)
   }
 
   snapshot() {
-    return this._makeView(this.root, false, 0)
+    return this._makeView(this.context, this.root, false, 0)
   }
 
   undo(n) {
-    return this._makeView(this.root, true, n)
+    return this._makeView(this.context, this.root, true, n)
   }
 
   write(opts) {
