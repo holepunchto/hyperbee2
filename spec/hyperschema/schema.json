@@ -110,6 +110,35 @@
       ]
     },
     {
+      "name": "core",
+      "namespace": "bee",
+      "compact": true,
+      "flagsPosition": 1,
+      "fields": [
+        {
+          "name": "key",
+          "required": true,
+          "type": "fixed32",
+          "version": 1
+        },
+        {
+          "name": "fork",
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "length",
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "treeHash",
+          "type": "fixed32",
+          "version": 1
+        }
+      ]
+    },
+    {
       "name": "block",
       "namespace": "bee",
       "compact": false,
@@ -153,7 +182,7 @@
         {
           "name": "cores",
           "array": true,
-          "type": "fixed32",
+          "type": "@bee/core",
           "version": 1
         }
       ]

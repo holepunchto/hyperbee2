@@ -96,6 +96,30 @@ bee.register({
 })
 
 bee.register({
+  name: 'core',
+  compact: true,
+  fields: [
+    {
+      name: 'key',
+      type: 'fixed32',
+      required: true
+    },
+    {
+      name: 'fork',
+      type: 'uint'
+    },
+    {
+      name: 'length',
+      type: 'uint'
+    },
+    {
+      name: 'treeHash',
+      type: 'fixed32'
+    }
+  ]
+})
+
+bee.register({
   name: 'block',
   fields: [
     {
@@ -129,7 +153,7 @@ bee.register({
     },
     {
       name: 'cores',
-      type: 'fixed32',
+      type: '@bee/core',
       array: true
     }
   ]
