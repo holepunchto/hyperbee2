@@ -55,6 +55,16 @@ test('basic overwrite', async function (t) {
   t.alike(db.head(), head)
 })
 
+test('empty noop batch', async function (t) {
+  const db = await create(t)
+
+  {
+    const w = db.write()
+    w.tryDelete(b4a.from('a'))
+    await w.flush()
+  }
+})
+
 test('basic encrypted', async function (t) {
   const db = await create(t, { encryption: { key: b4a.alloc(32, 'enc') } })
 
