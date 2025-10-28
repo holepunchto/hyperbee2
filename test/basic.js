@@ -55,6 +55,20 @@ test('basic overwrite', async function (t) {
   t.alike(db.head(), head)
 })
 
+test('basic encrypted', async function (t) {
+  const db = await create(t, { encryption: { key: b4a.alloc(32, 'enc') } })
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('PLAINTEXT'), b4a.from('PLAINTEXT'))
+    await w.flush()
+  }
+
+  t.is(db.core.length, 1)
+  const blk = await db.core.get(0, { raw: true })
+  t.ok(b4a.toString(blk).indexOf('PLAINTEXT') === -1)
+})
+
 test('big overwrite', async function (t) {
   const db = await create(t)
 
@@ -167,6 +181,30 @@ test('basic cross link', async function (t) {
   }
 
   const db2 = await create(t)
+
+  replicate(t, db, db2)
+
+  {
+    const w = db2.write(db.head())
+    w.tryPut(b4a.from('hej'), b4a.from('verden*'))
+    await w.flush()
+  }
+
+  t.alike((await db2.get(b4a.from('hej')))?.value, b4a.from('verden*'))
+  t.alike((await db2.get(b4a.from('hello')))?.value, b4a.from('world'))
+})
+
+test('basic cross link (encrypted)', async function (t) {
+  const db = await create(t, { encryption: { key: b4a.alloc(32) } })
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('hello'), b4a.from('world'))
+    w.tryPut(b4a.from('hej'), b4a.from('verden'))
+    await w.flush()
+  }
+
+  const db2 = await create(t, { encryption: { key: b4a.alloc(32) } })
 
   replicate(t, db, db2)
 
