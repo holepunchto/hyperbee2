@@ -11,8 +11,9 @@ class Hyperbee {
   constructor(store, options = {}) {
     const {
       key = null,
-      core = key ? store.get(key) : store.get({ key, name: 'bee' }),
-      context = new CoreContext(store, core, core),
+      encryption = null,
+      core = key ? store.get(key) : store.get({ key, name: 'bee', encryption }),
+      context = new CoreContext(store, core, core, encryption),
       maxCacheSize = 4096,
       cache = new NodeCache(maxCacheSize),
       root = null,
