@@ -20,6 +20,7 @@
     "hypercore": "^11.15.0",
     "hyperschema": "^1.14.0",
     "protocol-buffers-encodings": "^1.2.0",
+    "scope-lock": "^1.2.4",
     "streamx": "^2.22.1"
   },
   "devDependencies": {
