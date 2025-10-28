@@ -17,6 +17,74 @@ test('basic', async function (t) {
   t.alike((await db.get(b4a.from('hello'))).value, b4a.from('world'))
 })
 
+test('basic overwrite', async function (t) {
+  const db = await create(t)
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('a'), b4a.from('1'))
+    await w.flush()
+  }
+
+  t.alike((await db.get(b4a.from('a'))).value, b4a.from('1'))
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('a'), b4a.from('2'))
+    await w.flush()
+  }
+
+  t.alike((await db.get(b4a.from('a'))).value, b4a.from('2'))
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('a'), b4a.from('3'))
+    await w.flush()
+  }
+
+  t.alike((await db.get(b4a.from('a'))).value, b4a.from('3'))
+
+  const head = db.head()
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('a'), b4a.from('3'))
+    await w.flush()
+  }
+
+  t.alike(db.head(), head)
+})
+
+test('big overwrite', async function (t) {
+  const db = await create(t)
+
+  {
+    const w = db.write()
+    for (let i = 0; i < 3000; i++) {
+      w.tryPut(b4a.from('#' + i), b4a.from('1'))
+    }
+    await w.flush()
+  }
+
+  {
+    const w = db.write()
+    for (let i = 0; i < 3000; i++) {
+      w.tryPut(b4a.from('#' + i), b4a.from('2'))
+    }
+    await w.flush()
+  }
+
+  const actual = []
+  const expected = []
+
+  for await (const data of db.createReadStream()) {
+    actual.push(data.value)
+    expected.push(b4a.from('2'))
+  }
+
+  t.alike(actual, expected)
+})
+
 test('100 keys', async function (t) {
   const db = await create(t)
 
