@@ -286,3 +286,21 @@ test('changes', async function (t) {
   length -= changes[4].batch.length
   t.alike(changes[4].head, { ...head, length })
 })
+
+test('parallel batch', async function (t) {
+  const db = await create(t)
+  const w1 = db.write()
+  const w2 = db.write()
+
+  w1.tryPut(b4a.from('hello'), b4a.from('world'))
+  w1.tryPut(b4a.from('hej'), b4a.from('verden'))
+  w1.tryPut(b4a.from('hi'), b4a.from('ho'))
+
+  w2.tryPut(b4a.from('hello'), b4a.from('world*'))
+
+  await Promise.all([w1.flush(), w2.flush()])
+
+  t.alike((await db.get(b4a.from('hi'))).value, b4a.from('ho'))
+  t.alike((await db.get(b4a.from('hej'))).value, b4a.from('verden'))
+  t.alike((await db.get(b4a.from('hello'))).value, b4a.from('world*'))
+})
