@@ -4,6 +4,9 @@
 npm install hyperbee2
 ```
 
+Next major version for [hyperbee](https://github.com/holepunchto/hyperbee).
+Will be merged in there and released a new major when fully done.
+
 ## Usage
 
 ```js
