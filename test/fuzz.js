@@ -322,7 +322,7 @@ test('fuzz regression #3', async function (t) {
   t.alike(actual, expected)
 })
 
-test.solo('multi writer fuzz regression', async function (t) {
+test('multi writer fuzz regression', async function (t) {
   const [a, b] = await createMultiple(t, 2)
 
   await a.ready()
