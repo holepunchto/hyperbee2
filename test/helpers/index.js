@@ -42,5 +42,7 @@ async function createMultiple(t, n, opts) {
     dbs.push(db)
   }
 
+  t.teardown(() => store.close())
+
   return dbs
 }
