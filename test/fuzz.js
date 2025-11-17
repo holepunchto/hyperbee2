@@ -329,7 +329,7 @@ test('multi writer fuzz regression', async function (t) {
   await b.ready()
 
   {
-    const k = Buffer.from('0')
+    const k = b4a.from('0')
     const w = b.write({ key: a.core.key, length: a.core.length })
 
     w.tryPut(k, k)
@@ -337,7 +337,7 @@ test('multi writer fuzz regression', async function (t) {
   }
 
   {
-    const k = Buffer.from('13')
+    const k = b4a.from('13')
     const w = a.write()
 
     w.tryPut(k, k)
@@ -345,7 +345,7 @@ test('multi writer fuzz regression', async function (t) {
   }
 
   {
-    const k = Buffer.from('17')
+    const k = b4a.from('17')
     const w = a.write({ key: b.core.key, length: b.core.length })
 
     w.tryPut(k, k)
@@ -353,7 +353,7 @@ test('multi writer fuzz regression', async function (t) {
   }
 
   {
-    const k = Buffer.from('16')
+    const k = b4a.from('16')
     const w = b.write({ key: a.core.key, length: a.core.length })
 
     w.tryPut(k, k)
@@ -361,7 +361,7 @@ test('multi writer fuzz regression', async function (t) {
   }
 
   {
-    const k = Buffer.from('11')
+    const k = b4a.from('11')
     const w = b.write({ key: a.core.key, length: a.core.length })
 
     w.tryPut(k, k)
@@ -369,7 +369,7 @@ test('multi writer fuzz regression', async function (t) {
   }
 
   {
-    const k = Buffer.from('3')
+    const k = b4a.from('3')
     const w = a.write()
 
     w.tryPut(k, k)
@@ -377,7 +377,7 @@ test('multi writer fuzz regression', async function (t) {
   }
 
   {
-    const k = Buffer.from('19')
+    const k = b4a.from('19')
     const w = a.write()
 
     w.tryPut(k, k)
@@ -385,7 +385,7 @@ test('multi writer fuzz regression', async function (t) {
   }
 
   {
-    const k = Buffer.from('13')
+    const k = b4a.from('13')
     const w = a.write()
 
     w.tryPut(k, k)
@@ -393,7 +393,7 @@ test('multi writer fuzz regression', async function (t) {
   }
 
   {
-    const k = Buffer.from('18')
+    const k = b4a.from('18')
     const w = a.write()
 
     w.tryPut(k, k)
@@ -401,7 +401,7 @@ test('multi writer fuzz regression', async function (t) {
   }
 
   {
-    const k = Buffer.from('1')
+    const k = b4a.from('1')
     const w = a.write()
 
     w.tryPut(k, k)
@@ -409,7 +409,7 @@ test('multi writer fuzz regression', async function (t) {
   }
 
   {
-    const k = Buffer.from('15')
+    const k = b4a.from('15')
     const w = b.write({ key: a.core.key, length: a.core.length })
 
     w.tryPut(k, k)
@@ -417,7 +417,7 @@ test('multi writer fuzz regression', async function (t) {
   }
 
   {
-    const k = Buffer.from('7')
+    const k = b4a.from('7')
     const w = b.write({ key: a.core.key, length: a.core.length })
 
     w.tryPut(k, k)
@@ -425,7 +425,7 @@ test('multi writer fuzz regression', async function (t) {
   }
 
   {
-    const k = Buffer.from('16')
+    const k = b4a.from('16')
     const w = b.write()
 
     w.tryPut(k, k)
@@ -433,7 +433,7 @@ test('multi writer fuzz regression', async function (t) {
   }
 
   {
-    const k = Buffer.from('10')
+    const k = b4a.from('10')
     const w = a.write({ key: b.core.key, length: b.core.length })
 
     w.tryPut(k, k)
@@ -441,7 +441,7 @@ test('multi writer fuzz regression', async function (t) {
   }
 
   {
-    const k = Buffer.from('8')
+    const k = b4a.from('8')
     const w = a.write()
 
     w.tryPut(k, k)
