@@ -1,6 +1,6 @@
 const test = require('brittle')
 const b4a = require('b4a')
-const { create } = require('./helpers')
+const { create, createMultiple } = require('./helpers')
 
 test('fuzz regression #1', async function (t) {
   const db = await create(t)
@@ -320,6 +320,133 @@ test('fuzz regression #3', async function (t) {
   }
 
   t.alike(actual, expected)
+})
+
+test('multi writer fuzz regression', async function (t) {
+  const [a, b] = await createMultiple(t, 2)
+
+  await a.ready()
+  await b.ready()
+
+  {
+    const k = b4a.from('0')
+    const w = b.write({ key: a.core.key, length: a.core.length })
+
+    w.tryPut(k, k)
+    await w.flush()
+  }
+
+  {
+    const k = b4a.from('13')
+    const w = a.write()
+
+    w.tryPut(k, k)
+    await w.flush()
+  }
+
+  {
+    const k = b4a.from('17')
+    const w = a.write({ key: b.core.key, length: b.core.length })
+
+    w.tryPut(k, k)
+    await w.flush()
+  }
+
+  {
+    const k = b4a.from('16')
+    const w = b.write({ key: a.core.key, length: a.core.length })
+
+    w.tryPut(k, k)
+    await w.flush()
+  }
+
+  {
+    const k = b4a.from('11')
+    const w = b.write({ key: a.core.key, length: a.core.length })
+
+    w.tryPut(k, k)
+    await w.flush()
+  }
+
+  {
+    const k = b4a.from('3')
+    const w = a.write()
+
+    w.tryPut(k, k)
+    await w.flush()
+  }
+
+  {
+    const k = b4a.from('19')
+    const w = a.write()
+
+    w.tryPut(k, k)
+    await w.flush()
+  }
+
+  {
+    const k = b4a.from('13')
+    const w = a.write()
+
+    w.tryPut(k, k)
+    await w.flush()
+  }
+
+  {
+    const k = b4a.from('18')
+    const w = a.write()
+
+    w.tryPut(k, k)
+    await w.flush()
+  }
+
+  {
+    const k = b4a.from('1')
+    const w = a.write()
+
+    w.tryPut(k, k)
+    await w.flush()
+  }
+
+  {
+    const k = b4a.from('15')
+    const w = b.write({ key: a.core.key, length: a.core.length })
+
+    w.tryPut(k, k)
+    await w.flush()
+  }
+
+  {
+    const k = b4a.from('7')
+    const w = b.write({ key: a.core.key, length: a.core.length })
+
+    w.tryPut(k, k)
+    await w.flush()
+  }
+
+  {
+    const k = b4a.from('16')
+    const w = b.write()
+
+    w.tryPut(k, k)
+    await w.flush()
+  }
+
+  {
+    const k = b4a.from('10')
+    const w = a.write({ key: b.core.key, length: b.core.length })
+
+    w.tryPut(k, k)
+    await w.flush()
+  }
+
+  {
+    const k = b4a.from('8')
+    const w = a.write()
+
+    w.tryPut(k, k)
+    await w.flush()
+  }
 })
 
 test('fuzz regression #n', async function (t) {

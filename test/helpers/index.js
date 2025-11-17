@@ -2,6 +2,7 @@ const Bee = require('../../')
 const Corestore = require('corestore')
 
 exports.create = create
+exports.createMultiple = createMultiple
 exports.replicate = replicate
 
 async function replicate(t, a, b) {
@@ -29,4 +30,19 @@ async function create(t, opts) {
   const db = new Bee(store, opts)
   t.teardown(() => db.close())
   return db
+}
+
+async function createMultiple(t, n, opts) {
+  const store = new Corestore(await t.tmp())
+  const dbs = []
+
+  for (let i = 0; i < n; i++) {
+    const db = new Bee(store.namespace('#' + i), opts)
+    t.teardown(() => db.close())
+    dbs.push(db)
+  }
+
+  t.teardown(() => store.close())
+
+  return dbs
 }

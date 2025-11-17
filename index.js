@@ -148,7 +148,7 @@ class Hyperbee {
     for (let i = 0; i < keys.length; i++) {
       const k = tree.keys[i]
       const blk =
-        k.seq === ptr.seq && k.core === ptr.core
+        k.seq === ptr.seq && k.core === 0 && ptr.core === 0
           ? block
           : await context.getBlock(k.seq, k.core, activeRequests)
       const d = blk.data[k.offset]
