@@ -447,6 +447,8 @@ test('multi writer fuzz regression', async function (t) {
     w.tryPut(k, k)
     await w.flush()
   }
+
+  t.pass('finished')
 })
 
 test('fuzz regression #n', async function (t) {
