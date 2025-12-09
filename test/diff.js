@@ -905,6 +905,737 @@ test('diff cross-writer - chain of writers building on each other', async functi
   }
 })
 
+// === Advanced Test Cases ===
+
+test('diff with interleaved insertions and deletions', async function (t) {
+  const db = await create(t)
+
+  // Create initial tree with gaps
+  {
+    const w = db.write()
+    for (let i = 0; i < 50; i += 2) {
+      w.tryPut(b4a.from(String(i).padStart(3, '0')), b4a.from('v' + i))
+    }
+    await w.flush()
+  }
+
+  const snap = db.snapshot()
+
+  // Fill in the gaps and remove some existing
+  {
+    const w = db.write()
+    for (let i = 1; i < 50; i += 2) {
+      w.tryPut(b4a.from(String(i).padStart(3, '0')), b4a.from('v' + i))
+    }
+    for (let i = 0; i < 50; i += 4) {
+      w.tryDelete(b4a.from(String(i).padStart(3, '0')))
+    }
+    await w.flush()
+  }
+
+  const entries = await collect(db.createDiffStream(snap))
+
+  // Should have: 25 additions (odd numbers) + ~13 deletions (every 4th even)
+  const added = entries.filter((e) => e.right === null)
+  const deleted = entries.filter((e) => e.left === null)
+
+  t.is(added.length, 25) // 1,3,5,...,49
+  t.is(deleted.length, 13) // 0,4,8,...,48
+
+  // Verify order
+  for (let i = 1; i < entries.length; i++) {
+    const prevKey = entries[i - 1].left?.key || entries[i - 1].right?.key
+    const currKey = entries[i].left?.key || entries[i].right?.key
+    t.ok(b4a.compare(prevKey, currKey) < 0, 'entries should be in order')
+  }
+})
+
+test('diff with complete tree replacement', async function (t) {
+  const db = await create(t)
+
+  // Create tree with keys a-z
+  {
+    const w = db.write()
+    for (let i = 0; i < 26; i++) {
+      w.tryPut(b4a.from(String.fromCharCode(97 + i)), b4a.from('old-' + i))
+    }
+    await w.flush()
+  }
+
+  const snap = db.snapshot()
+
+  // Delete all and insert completely new keys
+  {
+    const w = db.write()
+    for (let i = 0; i < 26; i++) {
+      w.tryDelete(b4a.from(String.fromCharCode(97 + i)))
+    }
+    for (let i = 0; i < 26; i++) {
+      w.tryPut(b4a.from(String.fromCharCode(65 + i)), b4a.from('new-' + i)) // A-Z
+    }
+    await w.flush()
+  }
+
+  const entries = await collect(db.createDiffStream(snap))
+
+  t.is(entries.length, 52) // 26 deletions + 26 additions
+
+  // All A-Z should be additions (uppercase comes before lowercase in ASCII)
+  for (let i = 0; i < 26; i++) {
+    t.alike(entries[i].left.key, b4a.from(String.fromCharCode(65 + i)))
+    t.is(entries[i].right, null)
+  }
+
+  // All a-z should be deletions
+  for (let i = 0; i < 26; i++) {
+    t.is(entries[26 + i].left, null)
+    t.alike(entries[26 + i].right.key, b4a.from(String.fromCharCode(97 + i)))
+  }
+})
+
+test('diff with deep tree modifications', async function (t) {
+  const db = await create(t)
+
+  // Create a large tree to force multiple levels
+  {
+    const w = db.write()
+    for (let i = 0; i < 500; i++) {
+      w.tryPut(b4a.from(String(i).padStart(4, '0')), b4a.from('v' + i))
+    }
+    await w.flush()
+  }
+
+  const snap = db.snapshot()
+
+  // Modify keys at various positions to touch different subtrees
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('0001'), b4a.from('modified-start'))
+    w.tryPut(b4a.from('0250'), b4a.from('modified-middle'))
+    w.tryPut(b4a.from('0499'), b4a.from('modified-end'))
+    w.tryDelete(b4a.from('0100'))
+    w.tryDelete(b4a.from('0400'))
+    w.tryPut(b4a.from('0500'), b4a.from('new-beyond'))
+    await w.flush()
+  }
+
+  const entries = await collect(db.createDiffStream(snap))
+
+  t.is(entries.length, 6)
+
+  const byKey = new Map(entries.map((e) => [(e.left?.key || e.right?.key).toString(), e]))
+
+  t.alike(byKey.get('0001').left.value, b4a.from('modified-start'))
+  t.alike(byKey.get('0001').right.value, b4a.from('v1'))
+  t.is(byKey.get('0100').left, null)
+  t.alike(byKey.get('0250').left.value, b4a.from('modified-middle'))
+  t.is(byKey.get('0400').left, null)
+  t.alike(byKey.get('0499').left.value, b4a.from('modified-end'))
+  t.alike(byKey.get('0500').left.value, b4a.from('new-beyond'))
+  t.is(byKey.get('0500').right, null)
+})
+
+test('diff with value-only changes (same keys)', async function (t) {
+  const db = await create(t)
+
+  {
+    const w = db.write()
+    for (let i = 0; i < 100; i++) {
+      w.tryPut(b4a.from('key' + String(i).padStart(3, '0')), b4a.from('value-v1-' + i))
+    }
+    await w.flush()
+  }
+
+  const snap = db.snapshot()
+
+  // Change every value but keep all keys
+  {
+    const w = db.write()
+    for (let i = 0; i < 100; i++) {
+      w.tryPut(b4a.from('key' + String(i).padStart(3, '0')), b4a.from('value-v2-' + i))
+    }
+    await w.flush()
+  }
+
+  const entries = await collect(db.createDiffStream(snap))
+
+  t.is(entries.length, 100)
+
+  for (const e of entries) {
+    t.ok(e.left !== null)
+    t.ok(e.right !== null)
+    t.alike(e.left.key, e.right.key)
+    t.ok(e.left.value.toString().includes('v2'))
+    t.ok(e.right.value.toString().includes('v1'))
+  }
+})
+
+test('diff with binary keys', async function (t) {
+  const db = await create(t)
+
+  // Use binary keys with null bytes and high bytes
+  {
+    const w = db.write()
+    w.tryPut(Buffer.from([0x00, 0x00, 0x01]), b4a.from('1'))
+    w.tryPut(Buffer.from([0x00, 0x00, 0x02]), b4a.from('2'))
+    w.tryPut(Buffer.from([0xff, 0xff, 0x01]), b4a.from('3'))
+    w.tryPut(Buffer.from([0xff, 0xff, 0x02]), b4a.from('4'))
+    await w.flush()
+  }
+
+  const snap = db.snapshot()
+
+  {
+    const w = db.write()
+    w.tryPut(Buffer.from([0x00, 0x00, 0x01]), b4a.from('1-mod'))
+    w.tryDelete(Buffer.from([0xff, 0xff, 0x01]))
+    w.tryPut(Buffer.from([0x80, 0x00, 0x00]), b4a.from('middle'))
+    await w.flush()
+  }
+
+  const entries = await collect(db.createDiffStream(snap))
+
+  t.is(entries.length, 3)
+
+  // Should be in binary order
+  t.alike(entries[0].left.key, Buffer.from([0x00, 0x00, 0x01]))
+  t.alike(entries[1].left.key, Buffer.from([0x80, 0x00, 0x00]))
+  t.is(entries[1].right, null) // addition
+  t.is(entries[2].left, null) // deletion
+  t.alike(entries[2].right.key, Buffer.from([0xff, 0xff, 0x01]))
+})
+
+test('diff with very long keys', async function (t) {
+  const db = await create(t)
+
+  const longKey1 = b4a.from('a'.repeat(1000))
+  const longKey2 = b4a.from('b'.repeat(1000))
+  const longKey3 = b4a.from('c'.repeat(1000))
+
+  {
+    const w = db.write()
+    w.tryPut(longKey1, b4a.from('1'))
+    w.tryPut(longKey2, b4a.from('2'))
+    await w.flush()
+  }
+
+  const snap = db.snapshot()
+
+  {
+    const w = db.write()
+    w.tryPut(longKey2, b4a.from('2-modified'))
+    w.tryPut(longKey3, b4a.from('3'))
+    await w.flush()
+  }
+
+  const entries = await collect(db.createDiffStream(snap))
+
+  t.is(entries.length, 2)
+  t.alike(entries[0].left.key, longKey2)
+  t.alike(entries[0].left.value, b4a.from('2-modified'))
+  t.alike(entries[1].left.key, longKey3)
+  t.is(entries[1].right, null)
+})
+
+test('diff with very long values', async function (t) {
+  const db = await create(t)
+
+  const longValue1 = b4a.from('x'.repeat(10000))
+  const longValue2 = b4a.from('y'.repeat(10000))
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('a'), longValue1)
+    w.tryPut(b4a.from('b'), longValue1)
+    await w.flush()
+  }
+
+  const snap = db.snapshot()
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('a'), longValue2)
+    await w.flush()
+  }
+
+  const entries = await collect(db.createDiffStream(snap))
+
+  t.is(entries.length, 1)
+  t.alike(entries[0].left.value, longValue2)
+  t.alike(entries[0].right.value, longValue1)
+})
+
+test('diff with limit 0', async function (t) {
+  const db = await create(t)
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('a'), b4a.from('1'))
+    await w.flush()
+  }
+
+  const snap = db.snapshot()
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('b'), b4a.from('2'))
+    await w.flush()
+  }
+
+  const entries = await collect(db.createDiffStream(snap, { limit: 0 }))
+  t.is(entries.length, 0)
+})
+
+test('diff with limit 1', async function (t) {
+  const db = await create(t)
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('a'), b4a.from('1'))
+    await w.flush()
+  }
+
+  const snap = db.snapshot()
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('a'), b4a.from('1*'))
+    w.tryPut(b4a.from('b'), b4a.from('2'))
+    w.tryPut(b4a.from('c'), b4a.from('3'))
+    await w.flush()
+  }
+
+  const entries = await collect(db.createDiffStream(snap, { limit: 1 }))
+  t.is(entries.length, 1)
+  t.alike(entries[0].left.key, b4a.from('a'))
+})
+
+test('diff cross-writer with shared unchanged subtrees', async function (t) {
+  // This tests the subtree skip optimization across writers
+  const db1 = await create(t)
+
+  // Create a large tree
+  {
+    const w = db1.write()
+    for (let i = 0; i < 200; i++) {
+      w.tryPut(b4a.from(String(i).padStart(4, '0')), b4a.from('v' + i))
+    }
+    await w.flush()
+  }
+
+  const db2 = await create(t)
+  replicate(t, db1, db2)
+
+  // db2 only modifies one key - most subtrees should be skipped
+  {
+    const w = db2.write(db1.head())
+    w.tryPut(b4a.from('0100'), b4a.from('modified'))
+    await w.flush()
+  }
+
+  const entries = await collect(db2.createDiffStream(db1.snapshot()))
+
+  // Should only see the one modification
+  t.is(entries.length, 1)
+  t.alike(entries[0].left.key, b4a.from('0100'))
+  t.alike(entries[0].left.value, b4a.from('modified'))
+  t.alike(entries[0].right.value, b4a.from('v100'))
+})
+
+test('diff cross-writer three-way divergence', async function (t) {
+  // db1 creates base, db2/db3/db4 all fork from db1 with different changes
+  const db1 = await create(t)
+
+  {
+    const w = db1.write()
+    for (let i = 0; i < 10; i++) {
+      w.tryPut(b4a.from('k' + i), b4a.from('v' + i))
+    }
+    await w.flush()
+  }
+
+  const db1Head = db1.head()
+
+  const db2 = await create(t)
+  const db3 = await create(t)
+  const db4 = await create(t)
+
+  replicate(t, db1, db2)
+  replicate(t, db1, db3)
+  replicate(t, db1, db4)
+
+  // Each writer modifies different keys
+  {
+    const w = db2.write(db1Head)
+    w.tryPut(b4a.from('k0'), b4a.from('db2-k0'))
+    w.tryPut(b4a.from('k1'), b4a.from('db2-k1'))
+    await w.flush()
+  }
+
+  {
+    const w = db3.write(db1Head)
+    w.tryPut(b4a.from('k3'), b4a.from('db3-k3'))
+    w.tryPut(b4a.from('k4'), b4a.from('db3-k4'))
+    await w.flush()
+  }
+
+  {
+    const w = db4.write(db1Head)
+    w.tryPut(b4a.from('k6'), b4a.from('db4-k6'))
+    w.tryPut(b4a.from('k7'), b4a.from('db4-k7'))
+    await w.flush()
+  }
+
+  // Diff db2 vs db3
+  {
+    const entries = await collect(db2.createDiffStream(db3))
+    t.is(entries.length, 4) // k0, k1 differ (db2 modified), k3, k4 differ (db3 modified)
+
+    const byKey = new Map(entries.map((e) => [(e.left?.key || e.right?.key).toString(), e]))
+    t.alike(byKey.get('k0').left.value, b4a.from('db2-k0'))
+    t.alike(byKey.get('k0').right.value, b4a.from('v0'))
+    t.alike(byKey.get('k3').left.value, b4a.from('v3'))
+    t.alike(byKey.get('k3').right.value, b4a.from('db3-k3'))
+  }
+
+  // Diff db2 vs db4
+  {
+    const entries = await collect(db2.createDiffStream(db4))
+    t.is(entries.length, 4) // k0, k1 from db2, k6, k7 from db4
+
+    const byKey = new Map(entries.map((e) => [(e.left?.key || e.right?.key).toString(), e]))
+    t.alike(byKey.get('k0').left.value, b4a.from('db2-k0'))
+    t.alike(byKey.get('k6').right.value, b4a.from('db4-k6'))
+  }
+
+  // Diff db3 vs db4
+  {
+    const entries = await collect(db3.createDiffStream(db4))
+    t.is(entries.length, 4) // k3, k4 from db3, k6, k7 from db4
+
+    const byKey = new Map(entries.map((e) => [(e.left?.key || e.right?.key).toString(), e]))
+    t.alike(byKey.get('k3').left.value, b4a.from('db3-k3'))
+    t.alike(byKey.get('k7').right.value, b4a.from('db4-k7'))
+  }
+})
+
+test('diff with multiple sequential batches', async function (t) {
+  const db = await create(t)
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('a'), b4a.from('1'))
+    await w.flush()
+  }
+
+  const snap = db.snapshot()
+
+  // Multiple batches after snapshot
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('b'), b4a.from('2'))
+    await w.flush()
+  }
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('c'), b4a.from('3'))
+    await w.flush()
+  }
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('a'), b4a.from('1*'))
+    w.tryDelete(b4a.from('b'))
+    await w.flush()
+  }
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('d'), b4a.from('4'))
+    await w.flush()
+  }
+
+  const entries = await collect(db.createDiffStream(snap))
+
+  t.is(entries.length, 3) // a modified, c added, d added (b was added then deleted)
+  t.alike(entries[0].left.key, b4a.from('a'))
+  t.alike(entries[0].left.value, b4a.from('1*'))
+  t.alike(entries[1].left.key, b4a.from('c'))
+  t.alike(entries[2].left.key, b4a.from('d'))
+})
+
+test('diff range that starts and ends within unchanged regions', async function (t) {
+  const db = await create(t)
+
+  {
+    const w = db.write()
+    for (let i = 0; i < 100; i++) {
+      w.tryPut(b4a.from(String(i).padStart(3, '0')), b4a.from('v' + i))
+    }
+    await w.flush()
+  }
+
+  const snap = db.snapshot()
+
+  // Only modify keys outside the range we'll query
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('010'), b4a.from('modified'))
+    w.tryPut(b4a.from('090'), b4a.from('modified'))
+    await w.flush()
+  }
+
+  // Query range that has no changes
+  const entries = await collect(
+    db.createDiffStream(snap, { gte: b4a.from('040'), lt: b4a.from('060') })
+  )
+
+  t.is(entries.length, 0)
+})
+
+test('diff range that captures only some changes', async function (t) {
+  const db = await create(t)
+
+  {
+    const w = db.write()
+    for (let i = 0; i < 100; i++) {
+      w.tryPut(b4a.from(String(i).padStart(3, '0')), b4a.from('v' + i))
+    }
+    await w.flush()
+  }
+
+  const snap = db.snapshot()
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('020'), b4a.from('mod1'))
+    w.tryPut(b4a.from('050'), b4a.from('mod2'))
+    w.tryPut(b4a.from('080'), b4a.from('mod3'))
+    await w.flush()
+  }
+
+  // Range captures only middle change
+  const entries = await collect(
+    db.createDiffStream(snap, { gte: b4a.from('040'), lt: b4a.from('060') })
+  )
+
+  t.is(entries.length, 1)
+  t.alike(entries[0].left.key, b4a.from('050'))
+})
+
+test('diff symmetry - a vs b should be inverse of b vs a', async function (t) {
+  const db = await create(t)
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('a'), b4a.from('1'))
+    w.tryPut(b4a.from('b'), b4a.from('2'))
+    w.tryPut(b4a.from('c'), b4a.from('3'))
+    await w.flush()
+  }
+
+  const snap1 = db.snapshot()
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('b'), b4a.from('2*'))
+    w.tryDelete(b4a.from('c'))
+    w.tryPut(b4a.from('d'), b4a.from('4'))
+    await w.flush()
+  }
+
+  const snap2 = db.snapshot()
+
+  const forward = await collect(snap2.createDiffStream(snap1))
+  const backward = await collect(snap1.createDiffStream(snap2))
+
+  t.is(forward.length, backward.length)
+
+  // Each forward entry should have an inverse backward entry
+  for (let i = 0; i < forward.length; i++) {
+    const f = forward[i]
+    const b = backward[i]
+
+    if (f.left && f.right) {
+      // Modification - should be swapped
+      t.alike(f.left.key, b.right.key)
+      t.alike(f.right.key, b.left.key)
+      t.alike(f.left.value, b.right.value)
+      t.alike(f.right.value, b.left.value)
+    } else if (f.left && !f.right) {
+      // Addition in forward = deletion in backward
+      t.alike(f.left.key, b.right.key)
+      t.is(b.left, null)
+    } else {
+      // Deletion in forward = addition in backward
+      t.alike(f.right.key, b.left.key)
+      t.is(b.right, null)
+    }
+  }
+})
+
+test('diff with same key written multiple times', async function (t) {
+  const db = await create(t)
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('x'), b4a.from('initial'))
+    await w.flush()
+  }
+
+  const snap = db.snapshot()
+
+  // Write same key multiple times in sequence
+  for (let i = 0; i < 10; i++) {
+    const w = db.write()
+    w.tryPut(b4a.from('x'), b4a.from('version-' + i))
+    await w.flush()
+  }
+
+  const entries = await collect(db.createDiffStream(snap))
+
+  // Should only see the final diff
+  t.is(entries.length, 1)
+  t.alike(entries[0].left.value, b4a.from('version-9'))
+  t.alike(entries[0].right.value, b4a.from('initial'))
+})
+
+test('diff empty range on non-empty trees', async function (t) {
+  const db = await create(t)
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('mmm'), b4a.from('1'))
+    await w.flush()
+  }
+
+  const snap = db.snapshot()
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('mmm'), b4a.from('2'))
+    await w.flush()
+  }
+
+  // Range before all data
+  const e1 = await collect(db.createDiffStream(snap, { gte: b4a.from('aaa'), lt: b4a.from('bbb') }))
+  t.is(e1.length, 0)
+
+  // Range after all data
+  const e2 = await collect(
+    db.createDiffStream(snap, { gte: b4a.from('zzz'), lt: b4a.from('zzzz') })
+  )
+  t.is(e2.length, 0)
+})
+
+test('diff cross-writer with no common history', async function (t) {
+  // Two completely independent databases
+  const db1 = await create(t)
+  const db2 = await create(t)
+
+  {
+    const w = db1.write()
+    w.tryPut(b4a.from('a'), b4a.from('1'))
+    w.tryPut(b4a.from('b'), b4a.from('2'))
+    await w.flush()
+  }
+
+  {
+    const w = db2.write()
+    w.tryPut(b4a.from('c'), b4a.from('3'))
+    w.tryPut(b4a.from('d'), b4a.from('4'))
+    await w.flush()
+  }
+
+  // Diff independent databases - all keys differ
+  const entries = await collect(db1.createDiffStream(db2))
+
+  t.is(entries.length, 4)
+
+  const byKey = new Map(entries.map((e) => [(e.left?.key || e.right?.key).toString(), e]))
+
+  // db1 has a,b - db2 doesn't
+  t.alike(byKey.get('a').left.value, b4a.from('1'))
+  t.is(byKey.get('a').right, null)
+  t.alike(byKey.get('b').left.value, b4a.from('2'))
+  t.is(byKey.get('b').right, null)
+
+  // db2 has c,d - db1 doesn't
+  t.is(byKey.get('c').left, null)
+  t.alike(byKey.get('c').right.value, b4a.from('3'))
+  t.is(byKey.get('d').left, null)
+  t.alike(byKey.get('d').right.value, b4a.from('4'))
+})
+
+test('diff handles deletion of all keys', async function (t) {
+  const db = await create(t)
+
+  {
+    const w = db.write()
+    for (let i = 0; i < 50; i++) {
+      w.tryPut(b4a.from('key' + String(i).padStart(2, '0')), b4a.from('val' + i))
+    }
+    await w.flush()
+  }
+
+  const snap = db.snapshot()
+
+  // Delete everything
+  {
+    const w = db.write()
+    for (let i = 0; i < 50; i++) {
+      w.tryDelete(b4a.from('key' + String(i).padStart(2, '0')))
+    }
+    await w.flush()
+  }
+
+  const entries = await collect(db.createDiffStream(snap))
+
+  t.is(entries.length, 50)
+
+  for (const e of entries) {
+    t.is(e.left, null)
+    t.ok(e.right !== null)
+  }
+})
+
+test('diff cross-writer builds long chain then compares ends', async function (t) {
+  // Create a long chain: db1 -> db2 -> db3 -> ... -> db10
+  const dbs = [await create(t)]
+
+  // Initialize first db
+  {
+    const w = dbs[0].write()
+    w.tryPut(b4a.from('root'), b4a.from('v0'))
+    await w.flush()
+  }
+
+  // Build chain of 9 more writers
+  for (let i = 1; i < 10; i++) {
+    const newDb = await create(t)
+    replicate(t, dbs[i - 1], newDb)
+
+    const w = newDb.write(dbs[i - 1].head())
+    w.tryPut(b4a.from('key' + i), b4a.from('val' + i))
+    await w.flush()
+
+    dbs.push(newDb)
+  }
+
+  // Diff first vs last
+  const entries = await collect(dbs[9].createDiffStream(dbs[0].snapshot()))
+
+  // Should see all 9 additions
+  t.is(entries.length, 9)
+
+  for (let i = 1; i < 10; i++) {
+    const found = entries.find((e) => e.left?.key?.toString() === 'key' + i)
+    t.ok(found, 'should have key' + i)
+    t.is(found.right, null)
+  }
+})
+
 async function collect(stream) {
   const entries = []
   for await (const entry of stream) {
