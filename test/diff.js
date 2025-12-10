@@ -27,6 +27,8 @@ test('basic diff - add one key', async function (t) {
   t.alike(entries[0].left.key, b4a.from('d'))
   t.alike(entries[0].left.value, b4a.from('4'))
   t.is(entries[0].right, null)
+
+  await snap.close()
 })
 
 test('basic diff - modify one key', async function (t) {
@@ -55,6 +57,8 @@ test('basic diff - modify one key', async function (t) {
   t.alike(entries[0].left.value, b4a.from('modified'))
   t.alike(entries[0].right.key, b4a.from('b'))
   t.alike(entries[0].right.value, b4a.from('2'))
+
+  await snap.close()
 })
 
 test('basic diff - delete one key', async function (t) {
@@ -82,6 +86,8 @@ test('basic diff - delete one key', async function (t) {
   t.is(entries[0].left, null)
   t.alike(entries[0].right.key, b4a.from('b'))
   t.alike(entries[0].right.value, b4a.from('2'))
+
+  await snap.close()
 })
 
 test('diff with older snap as base', async function (t) {
@@ -108,6 +114,8 @@ test('diff with older snap as base', async function (t) {
   t.is(entries.length, 1)
   t.is(entries[0].left, null) // not in snap
   t.alike(entries[0].right.key, b4a.from('c')) // present in db
+
+  await snap.close()
 })
 
 test('diff identical trees - no output', async function (t) {
@@ -125,6 +133,8 @@ test('diff identical trees - no output', async function (t) {
   const entries = await collect(db.createDiffStream(snap))
 
   t.is(entries.length, 0)
+
+  await snap.close()
 })
 
 test('diff empty trees', async function (t) {
@@ -133,6 +143,8 @@ test('diff empty trees', async function (t) {
 
   const entries = await collect(db.createDiffStream(snap))
   t.is(entries.length, 0)
+
+  await snap.close()
 })
 
 test('diff empty to populated', async function (t) {
@@ -153,6 +165,8 @@ test('diff empty to populated', async function (t) {
   t.is(entries[0].right, null)
   t.alike(entries[1].left.key, b4a.from('b'))
   t.is(entries[1].right, null)
+
+  await snap.close()
 })
 
 test('diff populated to empty', async function (t) {
@@ -181,6 +195,8 @@ test('diff populated to empty', async function (t) {
   t.alike(entries[0].right.key, b4a.from('a'))
   t.is(entries[1].left, null)
   t.alike(entries[1].right.key, b4a.from('b'))
+
+  await snap.close()
 })
 
 test('diff with multiple changes', async function (t) {
@@ -229,6 +245,8 @@ test('diff with multiple changes', async function (t) {
   // f added
   t.alike(entries[3].left.key, b4a.from('f'))
   t.is(entries[3].right, null)
+
+  await snap.close()
 })
 
 test('diff with limit', async function (t) {
@@ -256,6 +274,8 @@ test('diff with limit', async function (t) {
   t.is(entries.length, 2)
   t.alike(entries[0].left.key, b4a.from('c'))
   t.alike(entries[1].left.key, b4a.from('d'))
+
+  await snap.close()
 })
 
 test('diff with range gt', async function (t) {
@@ -284,6 +304,8 @@ test('diff with range gt', async function (t) {
   t.is(entries.length, 2)
   t.alike(entries[0].left.key, b4a.from('b'))
   t.alike(entries[1].left.key, b4a.from('c'))
+
+  await snap.close()
 })
 
 test('diff with range gte', async function (t) {
@@ -312,6 +334,8 @@ test('diff with range gte', async function (t) {
   t.is(entries.length, 2)
   t.alike(entries[0].left.key, b4a.from('b'))
   t.alike(entries[1].left.key, b4a.from('c'))
+
+  await snap.close()
 })
 
 test('diff with range lt', async function (t) {
@@ -340,6 +364,8 @@ test('diff with range lt', async function (t) {
   t.is(entries.length, 2)
   t.alike(entries[0].left.key, b4a.from('a'))
   t.alike(entries[1].left.key, b4a.from('b'))
+
+  await snap.close()
 })
 
 test('diff with range lte', async function (t) {
@@ -368,6 +394,8 @@ test('diff with range lte', async function (t) {
   t.is(entries.length, 2)
   t.alike(entries[0].left.key, b4a.from('a'))
   t.alike(entries[1].left.key, b4a.from('b'))
+
+  await snap.close()
 })
 
 test('diff with range gt and lt', async function (t) {
@@ -398,6 +426,8 @@ test('diff with range gt and lt', async function (t) {
   t.is(entries.length, 2)
   t.alike(entries[0].left.key, b4a.from('b'))
   t.alike(entries[1].left.key, b4a.from('c'))
+
+  await snap.close()
 })
 
 test('diff large tree - performance (subtree skip)', async function (t) {
@@ -429,6 +459,8 @@ test('diff large tree - performance (subtree skip)', async function (t) {
   t.alike(entries[0].left.value, b4a.from('modified'))
   t.alike(entries[0].right.key, b4a.from('050'))
   t.alike(entries[0].right.value, b4a.from('50'))
+
+  await snap.close()
 })
 
 test('diff large tree with multiple sparse changes', async function (t) {
@@ -467,6 +499,8 @@ test('diff large tree with multiple sparse changes', async function (t) {
   t.is(entries[3].left, null) // deleted 175
   t.alike(entries[3].right.key, b4a.from('175'))
   t.alike(entries[4].left.key, b4a.from('999'))
+
+  await snap.close()
 })
 
 test('diff between two checkouts', async function (t) {
@@ -500,6 +534,9 @@ test('diff between two checkouts', async function (t) {
   t.is(entries.length, 1)
   t.alike(entries[0].left.key, b4a.from('b'))
   t.is(entries[0].right, null)
+
+  await v1.close()
+  await v2.close()
 })
 
 test('diff respects order - entries come in key order', async function (t) {
@@ -530,6 +567,8 @@ test('diff respects order - entries come in key order', async function (t) {
   t.alike(entries[0].left.key, b4a.from('a'))
   t.alike(entries[1].left.key, b4a.from('m'))
   t.alike(entries[2].left.key, b4a.from('z'))
+
+  await snap.close()
 })
 
 test('diff with batched writes', async function (t) {
@@ -563,6 +602,8 @@ test('diff with batched writes', async function (t) {
   t.is(entries[1].left, null) // b deleted
   t.alike(entries[2].left.key, b4a.from('d'))
   t.alike(entries[3].left.key, b4a.from('e'))
+
+  await snap.close()
 })
 
 test('diff oob seek - range outside data', async function (t) {
@@ -588,6 +629,8 @@ test('diff oob seek - range outside data', async function (t) {
   const entries = await collect(db.createDiffStream(snap, { gt: b4a.from('x'), lt: b4a.from('z') }))
 
   t.is(entries.length, 0)
+
+  await snap.close()
 })
 
 test('diff single key tree', async function (t) {
@@ -614,6 +657,8 @@ test('diff single key tree', async function (t) {
   t.alike(entries[0].left.value, b4a.from('2'))
   t.alike(entries[0].right.key, b4a.from('only'))
   t.alike(entries[0].right.value, b4a.from('1'))
+
+  await snap.close()
 })
 
 test('diff cross-writer scenario', async function (t) {
@@ -643,6 +688,8 @@ test('diff cross-writer scenario', async function (t) {
   t.is(entries.length, 1)
   t.alike(entries[0].left.key, b4a.from('c'))
   t.is(entries[0].right, null)
+
+  await snap1.close()
 })
 
 test('diff cross-writer - divergent writes from common ancestor', async function (t) {
@@ -788,7 +835,8 @@ test('diff cross-writer - chain of writers building on each other', async functi
 
   // Test 1: diff db4 against db1 (should show all cumulative changes)
   {
-    const entries = await collect(db4.createDiffStream(db1.snapshot()))
+    const snap1 = db1.snapshot()
+    const entries = await collect(db4.createDiffStream(snap1))
     const byKey = new Map(entries.map((e) => [(e.left?.key || e.right?.key).toString(), e]))
 
     // Changes from db1 -> db4:
@@ -822,11 +870,14 @@ test('diff cross-writer - chain of writers building on each other', async functi
 
     t.alike(byKey.get('h').left.value, b4a.from('8'))
     t.is(byKey.get('h').right, null)
+
+    await snap1.close()
   }
 
   // Test 2: diff db3 against db2 (one hop)
   {
-    const entries = await collect(db3.createDiffStream(db2.snapshot()))
+    const snap2 = db2.snapshot()
+    const entries = await collect(db3.createDiffStream(snap2))
     const byKey = new Map(entries.map((e) => [(e.left?.key || e.right?.key).toString(), e]))
 
     // Changes from db2 -> db3:
@@ -844,11 +895,14 @@ test('diff cross-writer - chain of writers building on each other', async functi
 
     t.alike(byKey.get('g').left.value, b4a.from('7'))
     t.is(byKey.get('g').right, null)
+
+    await snap2.close()
   }
 
   // Test 3: diff db2 against db4 (reverse direction, skip intermediate)
   {
-    const entries = await collect(db2.createDiffStream(db4.snapshot()))
+    const snap4 = db4.snapshot()
+    const entries = await collect(db2.createDiffStream(snap4))
     const byKey = new Map(entries.map((e) => [(e.left?.key || e.right?.key).toString(), e]))
 
     // This is db2's view vs db4's view
@@ -878,12 +932,15 @@ test('diff cross-writer - chain of writers building on each other', async functi
 
     t.is(byKey.get('h').left, null)
     t.alike(byKey.get('h').right.value, b4a.from('8'))
+
+    await snap4.close()
   }
 
   // Test 4: diff with range on cross-writer scenario
   {
+    const snap1 = db1.snapshot()
     const entries = await collect(
-      db4.createDiffStream(db1.snapshot(), {
+      db4.createDiffStream(snap1, {
         gte: b4a.from('c'),
         lt: b4a.from('g')
       })
@@ -902,6 +959,8 @@ test('diff cross-writer - chain of writers building on each other', async functi
     t.ok(!byKey.has('a'))
     t.ok(!byKey.has('g'))
     t.ok(!byKey.has('h'))
+
+    await snap1.close()
   }
 })
 
@@ -948,6 +1007,8 @@ test('diff with interleaved insertions and deletions', async function (t) {
     const currKey = entries[i].left?.key || entries[i].right?.key
     t.ok(b4a.compare(prevKey, currKey) < 0, 'entries should be in order')
   }
+
+  await snap.close()
 })
 
 test('diff with complete tree replacement', async function (t) {
@@ -991,6 +1052,8 @@ test('diff with complete tree replacement', async function (t) {
     t.is(entries[26 + i].left, null)
     t.alike(entries[26 + i].right.key, b4a.from(String.fromCharCode(97 + i)))
   }
+
+  await snap.close()
 })
 
 test('diff with deep tree modifications', async function (t) {
@@ -1033,6 +1096,8 @@ test('diff with deep tree modifications', async function (t) {
   t.alike(byKey.get('0499').left.value, b4a.from('modified-end'))
   t.alike(byKey.get('0500').left.value, b4a.from('new-beyond'))
   t.is(byKey.get('0500').right, null)
+
+  await snap.close()
 })
 
 test('diff with value-only changes (same keys)', async function (t) {
@@ -1068,6 +1133,8 @@ test('diff with value-only changes (same keys)', async function (t) {
     t.ok(e.left.value.toString().includes('v2'))
     t.ok(e.right.value.toString().includes('v1'))
   }
+
+  await snap.close()
 })
 
 test('diff with binary keys', async function (t) {
@@ -1103,6 +1170,8 @@ test('diff with binary keys', async function (t) {
   t.is(entries[1].right, null) // addition
   t.is(entries[2].left, null) // deletion
   t.alike(entries[2].right.key, Buffer.from([0xff, 0xff, 0x01]))
+
+  await snap.close()
 })
 
 test('diff with very long keys', async function (t) {
@@ -1135,6 +1204,8 @@ test('diff with very long keys', async function (t) {
   t.alike(entries[0].left.value, b4a.from('2-modified'))
   t.alike(entries[1].left.key, longKey3)
   t.is(entries[1].right, null)
+
+  await snap.close()
 })
 
 test('diff with very long values', async function (t) {
@@ -1163,6 +1234,8 @@ test('diff with very long values', async function (t) {
   t.is(entries.length, 1)
   t.alike(entries[0].left.value, longValue2)
   t.alike(entries[0].right.value, longValue1)
+
+  await snap.close()
 })
 
 test('diff with limit 0', async function (t) {
@@ -1184,6 +1257,8 @@ test('diff with limit 0', async function (t) {
 
   const entries = await collect(db.createDiffStream(snap, { limit: 0 }))
   t.is(entries.length, 0)
+
+  await snap.close()
 })
 
 test('diff with limit 1', async function (t) {
@@ -1208,6 +1283,8 @@ test('diff with limit 1', async function (t) {
   const entries = await collect(db.createDiffStream(snap, { limit: 1 }))
   t.is(entries.length, 1)
   t.alike(entries[0].left.key, b4a.from('a'))
+
+  await snap.close()
 })
 
 test('diff cross-writer with shared unchanged subtrees', async function (t) {
@@ -1233,13 +1310,16 @@ test('diff cross-writer with shared unchanged subtrees', async function (t) {
     await w.flush()
   }
 
-  const entries = await collect(db2.createDiffStream(db1.snapshot()))
+  const snap1 = db1.snapshot()
+  const entries = await collect(db2.createDiffStream(snap1))
 
   // Should only see the one modification
   t.is(entries.length, 1)
   t.alike(entries[0].left.key, b4a.from('0100'))
   t.alike(entries[0].left.value, b4a.from('modified'))
   t.alike(entries[0].right.value, b4a.from('v100'))
+
+  await snap1.close()
 })
 
 test('diff cross-writer three-way divergence', async function (t) {
@@ -1363,6 +1443,8 @@ test('diff with multiple sequential batches', async function (t) {
   t.alike(entries[0].left.value, b4a.from('1*'))
   t.alike(entries[1].left.key, b4a.from('c'))
   t.alike(entries[2].left.key, b4a.from('d'))
+
+  await snap.close()
 })
 
 test('diff range that starts and ends within unchanged regions', async function (t) {
@@ -1392,6 +1474,8 @@ test('diff range that starts and ends within unchanged regions', async function 
   )
 
   t.is(entries.length, 0)
+
+  await snap.close()
 })
 
 test('diff range that captures only some changes', async function (t) {
@@ -1422,6 +1506,8 @@ test('diff range that captures only some changes', async function (t) {
 
   t.is(entries.length, 1)
   t.alike(entries[0].left.key, b4a.from('050'))
+
+  await snap.close()
 })
 
 test('diff symmetry - a vs b should be inverse of b vs a', async function (t) {
@@ -1473,6 +1559,9 @@ test('diff symmetry - a vs b should be inverse of b vs a', async function (t) {
       t.is(b.right, null)
     }
   }
+
+  await snap1.close()
+  await snap2.close()
 })
 
 test('diff with same key written multiple times', async function (t) {
@@ -1499,6 +1588,8 @@ test('diff with same key written multiple times', async function (t) {
   t.is(entries.length, 1)
   t.alike(entries[0].left.value, b4a.from('version-9'))
   t.alike(entries[0].right.value, b4a.from('initial'))
+
+  await snap.close()
 })
 
 test('diff empty range on non-empty trees', async function (t) {
@@ -1527,6 +1618,8 @@ test('diff empty range on non-empty trees', async function (t) {
     db.createDiffStream(snap, { gte: b4a.from('zzz'), lt: b4a.from('zzzz') })
   )
   t.is(e2.length, 0)
+
+  await snap.close()
 })
 
 test('diff cross-writer with no common history', async function (t) {
@@ -1598,6 +1691,8 @@ test('diff handles deletion of all keys', async function (t) {
     t.is(e.left, null)
     t.ok(e.right !== null)
   }
+
+  await snap.close()
 })
 
 test('diff cross-writer builds long chain then compares ends', async function (t) {
@@ -1624,7 +1719,8 @@ test('diff cross-writer builds long chain then compares ends', async function (t
   }
 
   // Diff first vs last
-  const entries = await collect(dbs[9].createDiffStream(dbs[0].snapshot()))
+  const snap0 = dbs[0].snapshot()
+  const entries = await collect(dbs[9].createDiffStream(snap0))
 
   // Should see all 9 additions
   t.is(entries.length, 9)
@@ -1634,6 +1730,8 @@ test('diff cross-writer builds long chain then compares ends', async function (t
     t.ok(found, 'should have key' + i)
     t.is(found.right, null)
   }
+
+  await snap0.close()
 })
 
 async function collect(stream) {
