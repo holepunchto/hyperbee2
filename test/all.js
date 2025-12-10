@@ -10,6 +10,7 @@ async function runTests() {
   await import('./basic.js')
   await import('./fuzz.js')
   await import('./undo.js')
+  await import('./diff.js')
 
   test.resume()
 }
