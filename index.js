@@ -1,7 +1,8 @@
 const b4a = require('b4a')
 const Hypercore = require('hypercore')
-const KeyValueStream = require('./lib/key-value-stream.js')
-const ChangesStream = require('./lib/changes-stream.js')
+const { RangeStream } = require('./lib/ranges.js')
+const { DiffStream } = require('./lib/diff.js')
+const { ChangesStream } = require('./lib/changes.js')
 const NodeCache = require('./lib/cache.js')
 const WriteBatch = require('./lib/write.js')
 const CoreContext = require('./lib/context.js')
@@ -111,7 +112,11 @@ class Hyperbee {
   }
 
   createReadStream(range) {
-    return new KeyValueStream(this, range)
+    return new RangeStream(this, range)
+  }
+
+  createDiffStream(right, range) {
+    return new DiffStream(this, right, range)
   }
 
   createChangesStream(options) {
