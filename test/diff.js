@@ -249,7 +249,7 @@ test('diff with multiple changes', async function (t) {
   await snap.close()
 })
 
-test.skip('diff with limit', async function (t) {
+test('diff with limit', async function (t) {
   const db = await create(t)
 
   {
