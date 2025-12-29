@@ -65,6 +65,36 @@ test('empty noop batch', async function (t) {
   }
 })
 
+test('basic delete', async function (t) {
+  const db = await create(t)
+
+  {
+    const length = db.core.length
+    const w = db.write()
+    w.tryPut(b4a.from('a'), b4a.from('1'))
+    w.tryPut(b4a.from('b'), b4a.from('2'))
+    w.tryPut(b4a.from('c'), b4a.from('3'))
+    await w.flush()
+    t.ok(length < db.core.length)
+  }
+
+  {
+    const length = db.core.length
+    const w = db.write()
+    w.tryDelete(b4a.from('b'))
+    await w.flush({ debug: true })
+    t.ok(length < db.core.length)
+  }
+
+  const expected = ['a', 'c']
+
+  for await (const { key } of db.createReadStream()) {
+    t.alike(b4a.toString(key), expected.shift())
+  }
+
+  t.is(expected.length, 0)
+})
+
 test('basic encrypted', async function (t) {
   const db = await create(t, { encryption: { key: b4a.alloc(32, 'enc') } })
 
