@@ -124,7 +124,7 @@ class Hyperbee {
   }
 
   async peek(range = {}) {
-    const rs = new KeyValueStream(this, { ...range, limit: 1 })
+    const rs = new RangeStream(this, { ...range, limit: 1 })
     let entry = null
     for await (const data of rs) entry = data
     return entry

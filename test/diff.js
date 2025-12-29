@@ -1741,10 +1741,3 @@ async function collect(stream) {
   }
   return entries
 }
-
-function pretty(data) {
-  return {
-    left: data.left ? { key: data.left.key, value: data.left.value } : null,
-    right: data.right ? { key: data.right.key, value: data.right.value } : null
-  }
-}

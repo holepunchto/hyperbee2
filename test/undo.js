@@ -1,6 +1,6 @@
 const test = require('brittle')
 const b4a = require('b4a')
-const { create, replicate } = require('./helpers')
+const { create } = require('./helpers')
 
 test('undo', async function (t) {
   const db = await create(t)
