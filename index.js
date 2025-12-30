@@ -159,10 +159,15 @@ class Hyperbee {
           : await context.getBlock(k.seq, k.core, activeRequests)
 
       const bk = blk.keys[k.offset]
-      const bkp = bk.valuePointer
 
-      const vpCore = bkp ? await this.context.getCoreOffset(context, bkp.core, activeRequests) : 0
-      const vp = bkp ? new ValuePointer(this.context, vpCore, bkp.seq, bkp.offset, bkp.split) : null
+      let vp = null
+
+      if (bk.valuePointer) {
+        const p = bk.valuePointer
+        const ctx = await context.getContext(k.core, activeRequests)
+        const core = await this.context.getCoreOffset(ctx, p.core, activeRequests)
+        vp = new ValuePointer(this.context, core, p.seq, p.offset, p.split)
+      }
 
       const core = await this.context.getCoreOffset(context, k.core, activeRequests)
       keys[i] = new KeyPointer(this.context, core, k.seq, k.offset, false, bk.key, bk.value, vp)
