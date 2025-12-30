@@ -28,6 +28,37 @@
       ]
     },
     {
+      "name": "value-pointer",
+      "namespace": "bee",
+      "compact": true,
+      "flagsPosition": 3,
+      "fields": [
+        {
+          "name": "core",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "seq",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "offset",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "split",
+          "type": "uint",
+          "version": 1
+        }
+      ]
+    },
+    {
       "name": "block-pointer",
       "namespace": "bee",
       "compact": true,
@@ -90,10 +121,10 @@
       ]
     },
     {
-      "name": "data",
+      "name": "key",
       "namespace": "bee",
       "compact": true,
-      "flagsPosition": -1,
+      "flagsPosition": 1,
       "fields": [
         {
           "name": "key",
@@ -103,8 +134,12 @@
         },
         {
           "name": "value",
-          "required": true,
           "type": "buffer",
+          "version": 1
+        },
+        {
+          "name": "valuePointer",
+          "type": "@bee/value-pointer",
           "version": 1
         }
       ]
@@ -174,9 +209,15 @@
           "version": 1
         },
         {
-          "name": "data",
+          "name": "keys",
           "array": true,
-          "type": "@bee/data",
+          "type": "@bee/key",
+          "version": 1
+        },
+        {
+          "name": "values",
+          "array": true,
+          "type": "buffer",
           "version": 1
         },
         {

@@ -6,7 +6,7 @@ const { ChangesStream } = require('./lib/changes.js')
 const NodeCache = require('./lib/cache.js')
 const WriteBatch = require('./lib/write.js')
 const CoreContext = require('./lib/context.js')
-const { DataPointer, TreeNode, TreeNodePointer, EMPTY } = require('./lib/tree.js')
+const { KeyPointer, ValuePointer, TreeNode, TreeNodePointer, EMPTY } = require('./lib/tree.js')
 
 class Hyperbee {
   constructor(store, options = {}) {
@@ -144,7 +144,7 @@ class Hyperbee {
     }
 
     const block = await ptr.context.getBlock(ptr.seq, ptr.core, activeRequests)
-    const context = await ptr.context.getContext(ptr.core, activeRequests)
+    const ctx = await ptr.context.getContext(ptr.core, activeRequests)
     const tree = block.tree[ptr.offset]
 
     const keys = new Array(tree.keys.length)
@@ -155,20 +155,66 @@ class Hyperbee {
       const blk =
         k.seq === ptr.seq && k.core === 0 && ptr.core === 0
           ? block
-          : await context.getBlock(k.seq, k.core, activeRequests)
-      const d = blk.data[k.offset]
-      keys[i] = new DataPointer(context, k.core, k.seq, k.offset, false, d.key, d.value)
+          : await ctx.getBlock(k.seq, k.core, activeRequests)
+
+      const bk = blk.keys[k.offset]
+      const bkp = bk.valuePointer
+if (bkp) {
+  console.log()
+  console.log('inflate', bkp.core, ctx.core.id, ptr.context.core.id, (await ctx.getContext(k.core)).core.id)
+  console.log()
+}
+      const vp = bkp ? new ValuePointer(ctx, bkp.core, bkp.seq, bkp.offset, bkp.split) : null
+
+if (vp) {
+  vp.context = await ctx.getContext(k.core)
+}
+
+      keys[i] = new KeyPointer(ctx, k.core, k.seq, k.offset, false, bk.key, bk.value, vp)
     }
 
     for (let i = 0; i < children.length; i++) {
       const c = tree.children[i]
-      children[i] = new TreeNodePointer(context, c.core, c.seq, c.offset, false, null)
+      children[i] = new TreeNodePointer(ctx, c.core, c.seq, c.offset, false, null)
     }
 
     ptr.value = new TreeNode(keys, children)
     this.bump(ptr)
 
     return ptr.value
+  }
+
+  async finalizeKeyPointer(key, activeRequests = this.activeRequests) {
+    const value = key.value || await this.inflateValue(key, activeRequests)
+
+    return {
+      key: key.key,
+      value
+    }
+  }
+
+  async inflateValue(key, activeRequests = this.activeRequests) {
+    if (key.value) return key.value
+    if (!key.valuePointer) return null
+
+    const ptr = key.valuePointer
+
+    if (ptr.split === 0) {
+      const block = await ptr.context.getBlock(ptr.seq, ptr.core, activeRequests)
+      return block.values[ptr.offset]
+    }
+
+    const blockPromises = new Array(ptr.split + 1)
+    for (let i = 0; i < blockPromises.length; i++) {
+      blockPromises[i] = ptr.context.getBlock(ptr.seq - ptr.split + i, ptr.core, activeRequests)
+    }
+    const blocks = await Promise.all(blockPromises)
+    const splitValue = new Array(blockPromises.length)
+    for (let i = 0; i < splitValue.length - 1; i++) {
+      splitValue[i] = blocks[i].values[0]
+    }
+    splitValue[splitValue.length - 1] = blocks[blocks.length - 1].buffer[ptr.offset]
+    return b4a.concat(splitValue)
   }
 
   async bootstrap(activeRequests = this.activeRequests) {
@@ -227,7 +273,7 @@ class Hyperbee {
 
         c = b4a.compare(key, m.key)
 
-        if (c === 0) return m
+        if (c === 0) return this.finalizeKeyPointer(m, activeRequests)
 
         if (c < 0) e = mid
         else s = mid + 1

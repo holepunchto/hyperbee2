@@ -26,6 +26,32 @@ bee.register({
 })
 
 bee.register({
+  name: 'value-pointer',
+  compact: true,
+  fields: [
+    {
+      name: 'core',
+      type: 'uint',
+      required: true
+    },
+    {
+      name: 'seq',
+      type: 'uint',
+      required: true
+    },
+    {
+      name: 'offset',
+      type: 'uint',
+      required: true
+    },
+    {
+      name: 'split',
+      type: 'uint'
+    }
+  ]
+})
+
+bee.register({
   name: 'block-pointer',
   compact: true,
   fields: [
@@ -79,7 +105,7 @@ bee.register({
 })
 
 bee.register({
-  name: 'data',
+  name: 'key',
   compact: true,
   fields: [
     {
@@ -89,8 +115,11 @@ bee.register({
     },
     {
       name: 'value',
-      type: 'buffer',
-      required: true
+      type: 'buffer'
+    },
+    {
+      name: 'valuePointer',
+      type: '@bee/value-pointer'
     }
   ]
 })
@@ -147,8 +176,13 @@ bee.register({
       array: true
     },
     {
-      name: 'data',
-      type: '@bee/data',
+      name: 'keys',
+      type: '@bee/key',
+      array: true
+    },
+    {
+      name: 'values',
+      type: 'buffer',
       array: true
     },
     {
