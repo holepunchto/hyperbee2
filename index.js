@@ -144,7 +144,8 @@ class Hyperbee {
     }
 
     const block = await ptr.context.getBlock(ptr.seq, ptr.core, activeRequests)
-    const ctx = await ptr.context.getContext(ptr.core, activeRequests)
+    const context = await ptr.context.getContext(ptr.core, activeRequests)
+
     const tree = block.tree[ptr.offset]
 
     const keys = new Array(tree.keys.length)
@@ -155,27 +156,27 @@ class Hyperbee {
       const blk =
         k.seq === ptr.seq && k.core === 0 && ptr.core === 0
           ? block
-          : await ctx.getBlock(k.seq, k.core, activeRequests)
+          : await context.getBlock(k.seq, k.core, activeRequests)
 
       const bk = blk.keys[k.offset]
       const bkp = bk.valuePointer
-if (bkp) {
-  console.log()
-  console.log('inflate', bkp.core, ctx.core.id, ptr.context.core.id, (await ctx.getContext(k.core)).core.id)
-  console.log()
-}
-      const vp = bkp ? new ValuePointer(ctx, bkp.core, bkp.seq, bkp.offset, bkp.split) : null
 
-if (vp) {
-  vp.context = await ctx.getContext(k.core)
-}
+      const vpCore = bkp ? await this.context.getCoreOffset(context, bkp.core, activeRequests) : 0
+      const vp = bkp ? new ValuePointer(this.context, vpCore, bkp.seq, bkp.offset, bkp.split) : null
 
-      keys[i] = new KeyPointer(ctx, k.core, k.seq, k.offset, false, bk.key, bk.value, vp)
+      const core = await this.context.getCoreOffset(context, k.core, activeRequests)
+      keys[i] = new KeyPointer(this.context, core, k.seq, k.offset, false, bk.key, bk.value, vp)
     }
 
     for (let i = 0; i < children.length; i++) {
       const c = tree.children[i]
-      children[i] = new TreeNodePointer(ctx, c.core, c.seq, c.offset, false, null)
+      const core = await this.context.getCoreOffset(context, c.core, activeRequests)
+      children[i] = new TreeNodePointer(this.context, core, c.seq, c.offset, false, null)
+    }
+
+    if (ptr.context !== this.context) {
+      ptr.core = await ptr.context.getCoreOffset(this.context, ptr.core, activeRequests)
+      ptr.context = this.context
     }
 
     ptr.value = new TreeNode(keys, children)
