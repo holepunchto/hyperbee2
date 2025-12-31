@@ -4,13 +4,6 @@ const Corestore = require('corestore')
 exports.create = create
 exports.createMultiple = createMultiple
 exports.replicate = replicate
-exports.sync = sync
-
-async function sync(a) {
-  for await (const data of a.createReadStream()) {
-    // do nothing
-  }
-}
 
 async function replicate(t, a, b) {
   const s1 = a.replicate(true)

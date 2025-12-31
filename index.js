@@ -130,6 +130,15 @@ class Hyperbee {
     return entry
   }
 
+  download(range = {}) {
+    const rs = new RangeStream(this, range)
+    rs.resume()
+    return new Promise((resolve, reject) => {
+      rs.once('error', reject)
+      rs.once('close', resolve)
+    })
+  }
+
   bump(ptr) {
     if (ptr.changed) return ptr.value
     this.cache.bump(ptr)
@@ -188,7 +197,7 @@ class Hyperbee {
   }
 
   async finalizeKeyPointer(key, activeRequests = this.activeRequests) {
-    const value = key.value || await this.inflateValue(key, activeRequests)
+    const value = key.value || (await this.inflateValue(key, activeRequests))
 
     return {
       key: key.key,

@@ -802,7 +802,7 @@ test('diff cross-writer - chain of writers building on each other', async functi
   replicate(t, db1, db2)
 
   // ensure all data is there
-  for await (const data of db2.createReadStream()) {}
+  await db2.download()
 
   // db2: builds on db1, modifies 'b', adds 'f'
   {
@@ -825,7 +825,7 @@ test('diff cross-writer - chain of writers building on each other', async functi
   }
 
   // ensure all data is there
-  for await (const data of db3.createReadStream()) {}
+  db3.download()
 
   const db4 = await create(t)
   replicate(t, db3, db4)
@@ -1724,7 +1724,7 @@ test('diff cross-writer builds long chain then compares ends', async function (t
     dbs.push(newDb)
 
     // ensure all data is there
-    for await (const data of newDb.createReadStream()) {}
+    await newDb.download()
   }
 
   // Diff first vs last
