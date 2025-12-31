@@ -165,18 +165,15 @@ class Hyperbee {
       if (bk.valuePointer) {
         const p = bk.valuePointer
         const ctx = await context.getContext(k.core, activeRequests)
-        const core = await this.context.getCoreOffset(ctx, p.core, activeRequests)
-        vp = new ValuePointer(this.context, core, p.seq, p.offset, p.split)
+        vp = new ValuePointer(ctx, p.core, p.seq, p.offset, p.split)
       }
 
-      const core = await this.context.getCoreOffset(context, k.core, activeRequests)
-      keys[i] = new KeyPointer(this.context, core, k.seq, k.offset, false, bk.key, bk.value, vp)
+      keys[i] = new KeyPointer(context, k.core, k.seq, k.offset, false, bk.key, bk.value, vp)
     }
 
     for (let i = 0; i < children.length; i++) {
       const c = tree.children[i]
-      const core = await this.context.getCoreOffset(context, c.core, activeRequests)
-      children[i] = new TreeNodePointer(this.context, core, c.seq, c.offset, false, null)
+      children[i] = new TreeNodePointer(context, c.core, c.seq, c.offset, false, null)
     }
 
     if (ptr.context !== this.context) {
