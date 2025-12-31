@@ -146,6 +146,7 @@ class Hyperbee {
     return ptr.value
   }
 
+  // TODO: unslab these and parallize
   async inflate(ptr, activeRequests = this.activeRequests) {
     if (ptr.value) {
       this.bump(ptr)
