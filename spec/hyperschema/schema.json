@@ -28,6 +28,37 @@
       ]
     },
     {
+      "name": "value-pointer",
+      "namespace": "bee",
+      "compact": true,
+      "flagsPosition": 3,
+      "fields": [
+        {
+          "name": "core",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "seq",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "offset",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "split",
+          "type": "uint",
+          "version": 1
+        }
+      ]
+    },
+    {
       "name": "block-pointer",
       "namespace": "bee",
       "compact": true,
@@ -110,6 +141,30 @@
       ]
     },
     {
+      "name": "key",
+      "namespace": "bee",
+      "compact": true,
+      "flagsPosition": 1,
+      "fields": [
+        {
+          "name": "key",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        },
+        {
+          "name": "value",
+          "type": "buffer",
+          "version": 1
+        },
+        {
+          "name": "valuePointer",
+          "type": "@bee/value-pointer",
+          "version": 1
+        }
+      ]
+    },
+    {
       "name": "core",
       "namespace": "bee",
       "compact": true,
@@ -139,7 +194,7 @@
       ]
     },
     {
-      "name": "block",
+      "name": "block-0",
       "namespace": "bee",
       "compact": false,
       "flagsPosition": 3,
@@ -183,6 +238,61 @@
           "name": "cores",
           "array": true,
           "type": "@bee/core",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "block-1",
+      "namespace": "bee",
+      "compact": false,
+      "flagsPosition": 3,
+      "fields": [
+        {
+          "name": "type",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "checkpoint",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "batch",
+          "required": true,
+          "type": "@bee/batch-pointer",
+          "version": 1
+        },
+        {
+          "name": "previous",
+          "type": "@bee/block-pointer",
+          "version": 1
+        },
+        {
+          "name": "cores",
+          "array": true,
+          "type": "@bee/core",
+          "version": 1
+        },
+        {
+          "name": "tree",
+          "array": true,
+          "type": "@bee/tree",
+          "version": 1
+        },
+        {
+          "name": "keys",
+          "array": true,
+          "type": "@bee/key",
+          "version": 1
+        },
+        {
+          "name": "values",
+          "array": true,
+          "type": "buffer",
           "version": 1
         }
       ]
