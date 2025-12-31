@@ -171,6 +171,11 @@ bee.register({
       type: '@bee/block-pointer'
     },
     {
+      name: 'cores',
+      type: '@bee/core',
+      array: true
+    },
+    {
       name: 'tree',
       type: '@bee/tree',
       array: true
@@ -183,11 +188,6 @@ bee.register({
     {
       name: 'values',
       type: 'buffer',
-      array: true
-    },
-    {
-      name: 'cores',
-      type: '@bee/core',
       array: true
     }
   ]
