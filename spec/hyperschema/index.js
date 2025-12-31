@@ -170,9 +170,7 @@ const encoding6 = {
     if (m.valuePointer) encoding1.preencode(state, m.valuePointer)
   },
   encode(state, m) {
-    const flags =
-      (m.value ? 1 : 0) |
-      (m.valuePointer ? 2 : 0)
+    const flags = (m.value ? 1 : 0) | (m.valuePointer ? 2 : 0)
 
     c.buffer.encode(state, m.key)
     c.uint.encode(state, flags)
@@ -203,10 +201,7 @@ const encoding7 = {
     if (m.treeHash) c.fixed32.preencode(state, m.treeHash)
   },
   encode(state, m) {
-    const flags =
-      (m.fork ? 1 : 0) |
-      (m.length ? 2 : 0) |
-      (m.treeHash ? 4 : 0)
+    const flags = (m.fork ? 1 : 0) | (m.length ? 2 : 0) | (m.treeHash ? 4 : 0)
 
     c.fixed32.encode(state, m.key)
     c.uint.encode(state, flags)
@@ -249,11 +244,7 @@ const encoding8 = {
     if (m.cores) encoding8_6.preencode(state, m.cores)
   },
   encode(state, m) {
-    const flags =
-      (m.previous ? 1 : 0) |
-      (m.tree ? 2 : 0) |
-      (m.data ? 4 : 0) |
-      (m.cores ? 8 : 0)
+    const flags = (m.previous ? 1 : 0) | (m.tree ? 2 : 0) | (m.data ? 4 : 0) | (m.cores ? 8 : 0)
 
     c.uint.encode(state, m.type)
     c.uint.encode(state, m.checkpoint)

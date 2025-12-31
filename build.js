@@ -167,7 +167,7 @@ bee.register({
 
 bee.register({
   name: 'block-0',
-  fields:  [
+  fields: [
     {
       name: 'type',
       type: 'uint',
