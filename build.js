@@ -105,6 +105,23 @@ bee.register({
 })
 
 bee.register({
+  name: 'data',
+  compact: true,
+  fields: [
+    {
+      name: 'key',
+      type: 'buffer',
+      required: true
+    },
+    {
+      name: 'value',
+      type: 'buffer',
+      required: true
+    }
+  ]
+})
+
+bee.register({
   name: 'key',
   compact: true,
   fields: [
@@ -149,7 +166,47 @@ bee.register({
 })
 
 bee.register({
-  name: 'block',
+  name: 'block-0',
+  fields:  [
+    {
+      name: 'type',
+      type: 'uint',
+      required: true
+    },
+    {
+      name: 'checkpoint',
+      type: 'uint',
+      required: true
+    },
+    {
+      name: 'batch',
+      type: '@bee/batch-pointer',
+      required: true
+    },
+    {
+      name: 'previous',
+      type: '@bee/block-pointer'
+    },
+    {
+      name: 'tree',
+      type: '@bee/tree',
+      array: true
+    },
+    {
+      name: 'data',
+      type: '@bee/data',
+      array: true
+    },
+    {
+      name: 'cores',
+      type: '@bee/core',
+      array: true
+    }
+  ]
+})
+
+bee.register({
+  name: 'block-1',
   fields: [
     {
       name: 'type',

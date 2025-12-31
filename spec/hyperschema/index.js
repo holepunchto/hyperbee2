@@ -139,8 +139,29 @@ const encoding4 = {
   }
 }
 
-// @bee/key
+// @bee/data
 const encoding5 = {
+  preencode(state, m) {
+    c.buffer.preencode(state, m.key)
+    c.buffer.preencode(state, m.value)
+  },
+  encode(state, m) {
+    c.buffer.encode(state, m.key)
+    c.buffer.encode(state, m.value)
+  },
+  decode(state) {
+    const r0 = c.buffer.decode(state)
+    const r1 = c.buffer.decode(state)
+
+    return {
+      key: r0,
+      value: r1
+    }
+  }
+}
+
+// @bee/key
+const encoding6 = {
   preencode(state, m) {
     c.buffer.preencode(state, m.key)
     state.end++ // max flag is 2 so always one byte
@@ -149,7 +170,9 @@ const encoding5 = {
     if (m.valuePointer) encoding1.preencode(state, m.valuePointer)
   },
   encode(state, m) {
-    const flags = (m.value ? 1 : 0) | (m.valuePointer ? 2 : 0)
+    const flags =
+      (m.value ? 1 : 0) |
+      (m.valuePointer ? 2 : 0)
 
     c.buffer.encode(state, m.key)
     c.uint.encode(state, flags)
@@ -170,7 +193,7 @@ const encoding5 = {
 }
 
 // @bee/core
-const encoding6 = {
+const encoding7 = {
   preencode(state, m) {
     c.fixed32.preencode(state, m.key)
     state.end++ // max flag is 4 so always one byte
@@ -180,7 +203,10 @@ const encoding6 = {
     if (m.treeHash) c.fixed32.preencode(state, m.treeHash)
   },
   encode(state, m) {
-    const flags = (m.fork ? 1 : 0) | (m.length ? 2 : 0) | (m.treeHash ? 4 : 0)
+    const flags =
+      (m.fork ? 1 : 0) |
+      (m.length ? 2 : 0) |
+      (m.treeHash ? 4 : 0)
 
     c.fixed32.encode(state, m.key)
     c.uint.encode(state, flags)
@@ -202,36 +228,32 @@ const encoding6 = {
   }
 }
 
-// @bee/block.tree
-const encoding7_4 = c.array(encoding4)
-// @bee/block.keys
-const encoding7_5 = c.array(encoding5)
-// @bee/block.values
-const encoding7_6 = c.array(c.buffer)
-// @bee/block.cores
-const encoding7_7 = c.array(encoding6)
+// @bee/block-0.tree
+const encoding8_4 = c.array(encoding4)
+// @bee/block-0.data
+const encoding8_5 = c.array(encoding5)
+// @bee/block-0.cores
+const encoding8_6 = c.array(encoding7)
 
-// @bee/block
-const encoding7 = {
+// @bee/block-0
+const encoding8 = {
   preencode(state, m) {
     c.uint.preencode(state, m.type)
     c.uint.preencode(state, m.checkpoint)
     encoding3.preencode(state, m.batch)
-    state.end++ // max flag is 16 so always one byte
+    state.end++ // max flag is 8 so always one byte
 
     if (m.previous) encoding2.preencode(state, m.previous)
-    if (m.tree) encoding7_4.preencode(state, m.tree)
-    if (m.keys) encoding7_5.preencode(state, m.keys)
-    if (m.values) encoding7_6.preencode(state, m.values)
-    if (m.cores) encoding7_7.preencode(state, m.cores)
+    if (m.tree) encoding8_4.preencode(state, m.tree)
+    if (m.data) encoding8_5.preencode(state, m.data)
+    if (m.cores) encoding8_6.preencode(state, m.cores)
   },
   encode(state, m) {
     const flags =
       (m.previous ? 1 : 0) |
       (m.tree ? 2 : 0) |
-      (m.keys ? 4 : 0) |
-      (m.values ? 8 : 0) |
-      (m.cores ? 16 : 0)
+      (m.data ? 4 : 0) |
+      (m.cores ? 8 : 0)
 
     c.uint.encode(state, m.type)
     c.uint.encode(state, m.checkpoint)
@@ -239,10 +261,9 @@ const encoding7 = {
     c.uint.encode(state, flags)
 
     if (m.previous) encoding2.encode(state, m.previous)
-    if (m.tree) encoding7_4.encode(state, m.tree)
-    if (m.keys) encoding7_5.encode(state, m.keys)
-    if (m.values) encoding7_6.encode(state, m.values)
-    if (m.cores) encoding7_7.encode(state, m.cores)
+    if (m.tree) encoding8_4.encode(state, m.tree)
+    if (m.data) encoding8_5.encode(state, m.data)
+    if (m.cores) encoding8_6.encode(state, m.cores)
   },
   decode(state) {
     const r0 = c.uint.decode(state)
@@ -255,10 +276,70 @@ const encoding7 = {
       checkpoint: r1,
       batch: r2,
       previous: (flags & 1) !== 0 ? encoding2.decode(state) : null,
-      tree: (flags & 2) !== 0 ? encoding7_4.decode(state) : null,
-      keys: (flags & 4) !== 0 ? encoding7_5.decode(state) : null,
-      values: (flags & 8) !== 0 ? encoding7_6.decode(state) : null,
-      cores: (flags & 16) !== 0 ? encoding7_7.decode(state) : null
+      tree: (flags & 2) !== 0 ? encoding8_4.decode(state) : null,
+      data: (flags & 4) !== 0 ? encoding8_5.decode(state) : null,
+      cores: (flags & 8) !== 0 ? encoding8_6.decode(state) : null
+    }
+  }
+}
+
+// @bee/block-1.cores
+const encoding9_4 = encoding8_6
+// @bee/block-1.tree
+const encoding9_5 = encoding8_4
+// @bee/block-1.keys
+const encoding9_6 = c.array(encoding6)
+// @bee/block-1.values
+const encoding9_7 = c.array(c.buffer)
+
+// @bee/block-1
+const encoding9 = {
+  preencode(state, m) {
+    c.uint.preencode(state, m.type)
+    c.uint.preencode(state, m.checkpoint)
+    encoding3.preencode(state, m.batch)
+    state.end++ // max flag is 16 so always one byte
+
+    if (m.previous) encoding2.preencode(state, m.previous)
+    if (m.cores) encoding9_4.preencode(state, m.cores)
+    if (m.tree) encoding9_5.preencode(state, m.tree)
+    if (m.keys) encoding9_6.preencode(state, m.keys)
+    if (m.values) encoding9_7.preencode(state, m.values)
+  },
+  encode(state, m) {
+    const flags =
+      (m.previous ? 1 : 0) |
+      (m.cores ? 2 : 0) |
+      (m.tree ? 4 : 0) |
+      (m.keys ? 8 : 0) |
+      (m.values ? 16 : 0)
+
+    c.uint.encode(state, m.type)
+    c.uint.encode(state, m.checkpoint)
+    encoding3.encode(state, m.batch)
+    c.uint.encode(state, flags)
+
+    if (m.previous) encoding2.encode(state, m.previous)
+    if (m.cores) encoding9_4.encode(state, m.cores)
+    if (m.tree) encoding9_5.encode(state, m.tree)
+    if (m.keys) encoding9_6.encode(state, m.keys)
+    if (m.values) encoding9_7.encode(state, m.values)
+  },
+  decode(state) {
+    const r0 = c.uint.decode(state)
+    const r1 = c.uint.decode(state)
+    const r2 = encoding3.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      type: r0,
+      checkpoint: r1,
+      batch: r2,
+      previous: (flags & 1) !== 0 ? encoding2.decode(state) : null,
+      cores: (flags & 2) !== 0 ? encoding9_4.decode(state) : null,
+      tree: (flags & 4) !== 0 ? encoding9_5.decode(state) : null,
+      keys: (flags & 8) !== 0 ? encoding9_6.decode(state) : null,
+      values: (flags & 16) !== 0 ? encoding9_7.decode(state) : null
     }
   }
 }
@@ -296,12 +377,16 @@ function getEncoding(name) {
       return encoding3
     case '@bee/tree':
       return encoding4
-    case '@bee/key':
+    case '@bee/data':
       return encoding5
-    case '@bee/core':
+    case '@bee/key':
       return encoding6
-    case '@bee/block':
+    case '@bee/core':
       return encoding7
+    case '@bee/block-0':
+      return encoding8
+    case '@bee/block-1':
+      return encoding9
     default:
       throw new Error('Encoder not found ' + name)
   }
