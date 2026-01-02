@@ -111,12 +111,12 @@ class Hyperbee {
     if (!this.view) await this.store.close()
   }
 
-  createReadStream(range) {
-    return new RangeStream(this, range)
+  createReadStream(options) {
+    return new RangeStream(this, options)
   }
 
-  createDiffStream(right, range) {
-    return new DiffStream(this, right, range)
+  createDiffStream(right, options) {
+    return new DiffStream(this, right, options)
   }
 
   createChangesStream(options) {
