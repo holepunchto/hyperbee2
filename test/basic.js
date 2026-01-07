@@ -362,3 +362,43 @@ test('parallel batch', async function (t) {
   t.alike((await db.get(b4a.from('hej'))).value, b4a.from('verden'))
   t.alike((await db.get(b4a.from('hello'))).value, b4a.from('world*'))
 })
+
+test('basic seq, offset and core', async function (t) {
+  const db = await create(t)
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('a'), b4a.from('hello'))
+    await w.flush()
+  }
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('b'), b4a.from('world'))
+    await w.flush()
+  }
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('c'), b4a.from('!'))
+    await w.flush()
+  }
+
+  const a = await db.get(b4a.from('a'))
+  const b = await db.get(b4a.from('b'))
+  const c = await db.get(b4a.from('c'))
+
+  t.ok(a.seq !== null && a.seq !== undefined)
+  t.ok(a.offset !== null && a.offset !== undefined)
+  t.ok(a.core !== null && a.core !== undefined)
+
+  t.ok(b.seq !== null && b.seq !== undefined)
+  t.ok(b.offset !== null && b.offset !== undefined)
+  t.ok(b.core !== null && b.core !== undefined)
+
+  t.ok(c.seq !== null && c.seq !== undefined)
+  t.ok(c.offset !== null && c.offset !== undefined)
+  t.ok(c.core !== null && c.core !== undefined)
+
+  t.not(a.seq, b.seq)
+  t.not(a.seq, c.seq)
+  t.not(b.seq, c.seq)
+})
