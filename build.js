@@ -4,7 +4,7 @@ const schema = Hyperschema.from('./spec/hyperschema', { versioned: false })
 const bee = schema.namespace('bee')
 
 bee.register({
-  name: 'tree-pointer',
+  name: 'tree-pointer-0',
   compact: true,
   fields: [
     {
@@ -26,23 +26,59 @@ bee.register({
 })
 
 bee.register({
+  name: 'tree-pointer',
+  compact: true,
+  fields: [
+    {
+      name: 'core',
+      type: 'uint'
+    },
+    {
+      name: 'seq',
+      type: 'uint'
+    },
+    {
+      name: 'offset',
+      type: 'uint'
+    }
+  ]
+})
+
+bee.register({
+  name: 'tree-delta',
+  compact: true,
+  fields: [
+    {
+      name: 'type',
+      type: 'uint3'
+    },
+    {
+      name: 'index',
+      type: 'uint8'
+    },
+    {
+      name: 'pointer',
+      type: '@bee/tree-pointer',
+      inline: true
+    }
+  ]
+})
+
+bee.register({
   name: 'value-pointer',
   compact: true,
   fields: [
     {
       name: 'core',
-      type: 'uint',
-      required: true
+      type: 'uint'
     },
     {
       name: 'seq',
-      type: 'uint',
-      required: true
+      type: 'uint'
     },
     {
       name: 'offset',
-      type: 'uint',
-      required: true
+      type: 'uint'
     },
     {
       name: 'split',
@@ -86,18 +122,37 @@ bee.register({
 })
 
 bee.register({
-  name: 'tree',
+  name: 'tree-0',
   compact: true,
   fields: [
     {
       name: 'keys',
-      type: '@bee/tree-pointer',
+      type: '@bee/tree-pointer-0',
       array: true,
       required: true
     },
     {
       name: 'children',
-      type: '@bee/tree-pointer',
+      type: '@bee/tree-pointer-0',
+      array: true,
+      required: true
+    }
+  ]
+})
+
+bee.register({
+  name: 'tree',
+  compact: true,
+  fields: [
+    {
+      name: 'keys',
+      type: '@bee/tree-delta',
+      array: true,
+      required: true
+    },
+    {
+      name: 'children',
+      type: '@bee/tree-delta',
       array: true,
       required: true
     }
@@ -136,7 +191,8 @@ bee.register({
     },
     {
       name: 'valuePointer',
-      type: '@bee/value-pointer'
+      type: '@bee/value-pointer',
+      inline: true
     }
   ]
 })
@@ -189,7 +245,7 @@ bee.register({
     },
     {
       name: 'tree',
-      type: '@bee/tree',
+      type: '@bee/tree-0',
       array: true
     },
     {
@@ -245,6 +301,11 @@ bee.register({
     {
       name: 'values',
       type: 'buffer',
+      array: true
+    },
+    {
+      name: 'cohorts',
+      type: '@bee/tree-delta',
       array: true
     }
   ]

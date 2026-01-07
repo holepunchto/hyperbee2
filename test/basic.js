@@ -17,7 +17,7 @@ test('basic', async function (t) {
   t.alike((await db.get(b4a.from('hello'))).value, b4a.from('world'))
 })
 
-test('basic (empty cache)', async function (t) {
+test.solo('basic (empty cache)', async function (t) {
   const db = await create(t)
   const w = db.write()
 
