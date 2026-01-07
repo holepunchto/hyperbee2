@@ -186,11 +186,6 @@ class Hyperbee {
       children[i] = new TreeNodePointer(context, c.core, c.seq, c.offset, false, null)
     }
 
-    if (ptr.context !== this.context) {
-      ptr.core = await ptr.context.getCoreOffset(this.context, ptr.core, activeRequests)
-      ptr.context = this.context
-    }
-
     ptr.value = new TreeNode(keys, children)
     this.bump(ptr)
 
