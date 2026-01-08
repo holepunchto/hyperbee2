@@ -14,11 +14,7 @@ const {
   TreeNodePointer,
   EMPTY
 } = require('./lib/tree.js')
-const {
-  DeltaOp,
-  DeltaCohort,
-  OP_COHORT
-} = require('./lib/compression.js')
+const { DeltaOp, DeltaCohort, OP_COHORT } = require('./lib/compression.js')
 
 class Hyperbee {
   constructor(store, options = {}) {
@@ -354,7 +350,7 @@ function inflateChild(context, d, ptr, block, activeRequests) {
   return Promise.resolve(inflateChildDelta(context, d, ptr, block, activeRequests))
 }
 
-function inflateChildDelta (context, d, ptr, block, activeRequests) {
+function inflateChildDelta(context, d, ptr, block, activeRequests) {
   const p = d.pointer
   const c = p && new TreeNodePointer(context, p.core, p.seq, p.offset, false, null)
   return new DeltaOp(false, d.type, d.index, c)
