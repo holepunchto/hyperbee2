@@ -961,6 +961,8 @@ test('random fuzz (2k rounds)', async function (t) {
       await w.flush()
     } catch (err) {
       dump()
+      // makes it easier to flush if teeing....
+      await new Promise(r => setTimeout(r, 5_000))
       throw err
     }
   }
