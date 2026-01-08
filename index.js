@@ -161,8 +161,10 @@ class Hyperbee {
       return ptr.value
     }
 
-    const block = await ptr.context.getBlock(ptr.seq, ptr.core, activeRequests)
-    const context = await ptr.context.getContext(ptr.core, activeRequests)
+    const [block, context] = await Promise.all([
+      ptr.context.getBlock(ptr.seq, ptr.core, activeRequests),
+      ptr.context.getContext(ptr.core, activeRequests)
+    ])
 
     const tree = block.tree[ptr.offset]
 
@@ -171,15 +173,15 @@ class Hyperbee {
 
     for (let i = 0; i < keys.length; i++) {
       const d = tree.keys[i]
-      keys[i] = await inflateKey(context, d, ptr, block, activeRequests)
+      keys[i] = inflateKey(context, d, ptr, block, activeRequests)
     }
 
     for (let i = 0; i < children.length; i++) {
       const d = tree.children[i]
-      children[i] = await inflateChild(context, d, ptr, block, activeRequests)
+      children[i] = inflateChild(context, d, ptr, block, activeRequests)
     }
 
-    ptr.value = new TreeNode(keys, children)
+    ptr.value = new TreeNode(await Promise.all(keys), await Promise.all(children))
     this.bump(ptr)
 
     return ptr.value
