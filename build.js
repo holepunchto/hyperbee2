@@ -65,6 +65,13 @@ bee.register({
 })
 
 bee.register({
+  name: 'cohort',
+  compact: true,
+  type: '@bee/tree-delta',
+  array: true
+})
+
+bee.register({
   name: 'value-pointer',
   compact: true,
   fields: [
@@ -305,7 +312,7 @@ bee.register({
     },
     {
       name: 'cohorts',
-      type: '@bee/tree-delta',
+      type: '@bee/cohort',
       array: true
     }
   ]

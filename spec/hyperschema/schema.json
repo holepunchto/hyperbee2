@@ -75,6 +75,12 @@
       ]
     },
     {
+      "name": "cohort",
+      "namespace": "bee",
+      "array": true,
+      "type": "@bee/tree-delta"
+    },
+    {
       "name": "value-pointer",
       "namespace": "bee",
       "compact": true,
@@ -360,6 +366,12 @@
           "name": "values",
           "array": true,
           "type": "buffer",
+          "version": 1
+        },
+        {
+          "name": "cohorts",
+          "array": true,
+          "type": "@bee/cohort",
           "version": 1
         }
       ]

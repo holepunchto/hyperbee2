@@ -17,7 +17,7 @@ test('basic', async function (t) {
   t.alike((await db.get(b4a.from('hello'))).value, b4a.from('world'))
 })
 
-test.solo('basic (empty cache)', async function (t) {
+test('basic (empty cache)', async function (t) {
   const db = await create(t)
   const w = db.write()
 
@@ -32,6 +32,23 @@ test.solo('basic (empty cache)', async function (t) {
   t.alike((await db.get(b4a.from('hi'))).value, b4a.from('ho'))
   t.alike((await db.get(b4a.from('hej'))).value, b4a.from('verden'))
   t.alike((await db.get(b4a.from('hello'))).value, b4a.from('world'))
+})
+
+test('basic, bigger (empty cache)', async function (t) {
+  const db = await create(t)
+  const w = db.write()
+
+  for (let i = 0; i < 20; i++) {
+    w.tryPut(b4a.from('#' + i), b4a.from('#' + i))
+  }
+
+  await w.flush()
+
+  db.cache.empty()
+
+  for (let i = 0; i < 20; i++) {
+    t.alike((await db.get(b4a.from('#' + i))).value, b4a.from('#' + i))
+  }
 })
 
 test('basic overwrite', async function (t) {
