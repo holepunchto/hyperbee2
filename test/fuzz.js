@@ -957,7 +957,12 @@ test('random fuzz (2k rounds)', async function (t) {
     }
     log.push('  await w.flush()')
     log.push('}')
-    await w.flush()
+    try {
+      await w.flush()
+    } catch (err) {
+      dump()
+      throw err
+    }
   }
 
   const sorted = [...expected.values()].sort(b4a.compare)
@@ -1010,11 +1015,12 @@ test('random fuzz (2k rounds)', async function (t) {
     t.alike(actual, expected)
 
     if (b4a.equals(b4a.concat(expected), b4a.concat(actual))) return
+    dump(opts)
+  }
 
+  function dump(opts = {}) {
     let s = 'const db = await create(t)\n\n'
-
     s += 'const expected = new Map()\n'
-
     s += '\n'
     s += log.join('\n')
     s += '\n'
@@ -1026,12 +1032,10 @@ test('random fuzz (2k rounds)', async function (t) {
     s += '  lt: ' + (opts.lt ? "b4a.from('" + b4a.toString(opts.lt) + "')" : 'null') + ',\n'
     s += '  reverse: ' + !!opts.reverse + '\n'
     s += '}\n\n'
-
     s += 'const actual = []\n\n'
     s += 'for await (const data of db.createReadStream(query)) {\n'
     s += '  actual.push(b4a.toString(data.key))\n'
     s += '}\n\n'
-
     s += 't.alike(actual, [...expected.values()].sort())\n'
     console.log(s)
   }
