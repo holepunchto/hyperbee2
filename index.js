@@ -196,7 +196,7 @@ class Hyperbee {
     const value = key.value || (await this.inflateValue(key, activeRequests))
 
     return {
-      core: key.core,
+      core: key.context.getCore(key.core),
       offset: key.offset,
       seq: key.seq,
       key: key.key,

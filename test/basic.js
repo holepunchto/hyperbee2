@@ -388,15 +388,15 @@ test('basic seq, offset and core', async function (t) {
 
   t.ok(a.seq !== null && a.seq !== undefined)
   t.ok(a.offset !== null && a.offset !== undefined)
-  t.ok(a.core !== null && a.core !== undefined)
+  t.ok(a.core !== null && typeof a.core === 'object')
 
   t.ok(b.seq !== null && b.seq !== undefined)
   t.ok(b.offset !== null && b.offset !== undefined)
-  t.ok(b.core !== null && b.core !== undefined)
+  t.ok(b.core !== null && typeof b.core === 'object')
 
   t.ok(c.seq !== null && c.seq !== undefined)
   t.ok(c.offset !== null && c.offset !== undefined)
-  t.ok(c.core !== null && c.core !== undefined)
+  t.ok(c.core !== null && typeof c.core === 'object')
 
   t.not(a.seq, b.seq)
   t.not(a.seq, c.seq)
