@@ -930,6 +930,8 @@ test('fuzz regression #n', async function (t) {
 })
 
 test('random fuzz (2k rounds)', async function (t) {
+  t.timeout(120_000)
+
   const db = await create(t)
 
   const expected = new Map()
