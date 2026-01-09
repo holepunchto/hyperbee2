@@ -269,6 +269,18 @@ bee.register({
 })
 
 bee.register({
+  name: 'metadata',
+  fields: [
+    {
+      name: 'cores',
+      type: '@bee/core',
+      array: true,
+      required: true
+    }
+  ]
+})
+
+bee.register({
   name: 'block-1',
   fields: [
     {
@@ -291,9 +303,8 @@ bee.register({
       type: '@bee/block-pointer'
     },
     {
-      name: 'cores',
-      type: '@bee/core',
-      array: true
+      name: 'metadata',
+      type: '@bee/metadata'
     },
     {
       name: 'tree',

@@ -316,6 +316,21 @@
       ]
     },
     {
+      "name": "metadata",
+      "namespace": "bee",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "cores",
+          "required": true,
+          "array": true,
+          "type": "@bee/core",
+          "version": 1
+        }
+      ]
+    },
+    {
       "name": "block-1",
       "namespace": "bee",
       "compact": false,
@@ -345,9 +360,8 @@
           "version": 1
         },
         {
-          "name": "cores",
-          "array": true,
-          "type": "@bee/core",
+          "name": "metadata",
+          "type": "@bee/metadata",
           "version": 1
         },
         {
