@@ -19,7 +19,7 @@ const { DeltaOp, DeltaCohort, OP_COHORT } = require('./lib/compression.js')
 class Hyperbee {
   constructor(store, options = {}) {
     const {
-      t = 5, // legacy number for now, should be 128 now
+      t = 128, // legacy number for now, should be 128 now
       key = null,
       encryption = null,
       core = key ? store.get(key) : store.get({ key, name: 'bee', encryption }),
