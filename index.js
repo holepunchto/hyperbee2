@@ -6,15 +6,24 @@ const { ChangesStream } = require('./lib/changes.js')
 const NodeCache = require('./lib/cache.js')
 const WriteBatch = require('./lib/write.js')
 const CoreContext = require('./lib/context.js')
-const { KeyPointer, ValuePointer, TreeNode, TreeNodePointer, EMPTY } = require('./lib/tree.js')
+const {
+  Pointer,
+  KeyPointer,
+  ValuePointer,
+  TreeNode,
+  TreeNodePointer,
+  EMPTY
+} = require('./lib/tree.js')
+const { DeltaOp, DeltaCohort, OP_COHORT } = require('./lib/compression.js')
 
 class Hyperbee {
   constructor(store, options = {}) {
     const {
+      t = 128, // legacy number for now, should be 128 now
       key = null,
       encryption = null,
       core = key ? store.get(key) : store.get({ key, name: 'bee', encryption }),
-      context = new CoreContext(store, core, core, encryption),
+      context = new CoreContext(store, core, core, encryption, t),
       maxCacheSize = 4096,
       cache = new NodeCache(maxCacheSize),
       root = null,
@@ -153,8 +162,10 @@ class Hyperbee {
       return ptr.value
     }
 
-    const block = await ptr.context.getBlock(ptr.seq, ptr.core, activeRequests)
-    const context = await ptr.context.getContext(ptr.core, activeRequests)
+    const [block, context] = await Promise.all([
+      ptr.context.getBlock(ptr.seq, ptr.core, activeRequests),
+      ptr.context.getContext(ptr.core, activeRequests)
+    ])
 
     const tree = block.tree[ptr.offset]
 
@@ -162,31 +173,16 @@ class Hyperbee {
     const children = new Array(tree.children.length)
 
     for (let i = 0; i < keys.length; i++) {
-      const k = tree.keys[i]
-      const blk =
-        k.seq === ptr.seq && k.core === 0 && ptr.core === 0
-          ? block
-          : await context.getBlock(k.seq, k.core, activeRequests)
-
-      const bk = blk.keys[k.offset]
-
-      let vp = null
-
-      if (bk.valuePointer) {
-        const p = bk.valuePointer
-        const ctx = await context.getContext(k.core, activeRequests)
-        vp = new ValuePointer(ctx, p.core, p.seq, p.offset, p.split)
-      }
-
-      keys[i] = new KeyPointer(context, k.core, k.seq, k.offset, false, bk.key, bk.value, vp)
+      const d = tree.keys[i]
+      keys[i] = inflateKey(context, d, ptr, block, activeRequests)
     }
 
     for (let i = 0; i < children.length; i++) {
-      const c = tree.children[i]
-      children[i] = new TreeNodePointer(context, c.core, c.seq, c.offset, false, null)
+      const d = tree.children[i]
+      children[i] = inflateChild(context, d, ptr, block, activeRequests)
     }
 
-    ptr.value = new TreeNode(keys, children)
+    ptr.value = new TreeNode(await Promise.all(keys), await Promise.all(children))
     this.bump(ptr)
 
     return ptr.value
@@ -280,7 +276,7 @@ class Hyperbee {
 
       while (s < e) {
         const mid = (s + e) >> 1
-        const m = v.keys[mid]
+        const m = v.keys.get(mid)
 
         c = b4a.compare(key, m.key)
 
@@ -293,7 +289,7 @@ class Hyperbee {
       if (!v.children.length) return null
 
       const i = c < 0 ? e : s
-      ptr = v.children[i]
+      ptr = v.children.get(i)
     }
   }
 }
@@ -301,3 +297,84 @@ class Hyperbee {
 module.exports = Hyperbee
 
 function noop() {}
+
+function inflateKey(context, d, ptr, block, activeRequests) {
+  if (d.type === OP_COHORT) return inflateKeyCohort(context, d, ptr, block, activeRequests)
+  return inflateKeyDelta(context, d, ptr, block, activeRequests)
+}
+
+async function inflateKeyDelta(context, d, ptr, block, activeRequests) {
+  const k = d.pointer
+
+  if (!k) return new DeltaOp(false, d.type, d.index, null)
+
+  const blk =
+    k.seq === ptr.seq && k.core === 0 && ptr.core === 0
+      ? block
+      : await context.getBlock(k.seq, k.core, activeRequests)
+
+  const bk = blk.keys[k.offset]
+
+  let vp = null
+
+  if (bk.valuePointer) {
+    const p = bk.valuePointer
+    const ctx = await context.getContext(k.core, activeRequests)
+    vp = new ValuePointer(ctx, p.core, p.seq, p.offset, p.split)
+  }
+
+  const kp = new KeyPointer(context, k.core, k.seq, k.offset, false, bk.key, bk.value, vp)
+  return new DeltaOp(false, d.type, d.index, kp)
+}
+
+async function inflateKeyCohort(context, d, ptr, block, activeRequests) {
+  const co = d.pointer
+
+  const blk =
+    co.seq === ptr.seq && co.core === 0 && ptr.core === 0
+      ? block
+      : await context.getBlock(co.seq, co.core, activeRequests)
+
+  const cohort = blk.cohorts[co.offset]
+  const promises = new Array(cohort.length)
+
+  for (let i = 0; i < cohort.length; i++) {
+    const p = cohort[i]
+    const k = inflateKeyDelta(context, p, co, blk, activeRequests)
+    promises[i] = k
+  }
+
+  const p = new Pointer(context, co.core, co.seq, co.offset)
+  return new DeltaCohort(false, p, await Promise.all(promises))
+}
+
+function inflateChild(context, d, ptr, block, activeRequests) {
+  if (d.type === OP_COHORT) return inflateChildCohort(context, d, ptr, block, activeRequests)
+  return Promise.resolve(inflateChildDelta(context, d, ptr, block, activeRequests))
+}
+
+function inflateChildDelta(context, d, ptr, block, activeRequests) {
+  const p = d.pointer
+  const c = p && new TreeNodePointer(context, p.core, p.seq, p.offset, false, null)
+  return new DeltaOp(false, d.type, d.index, c)
+}
+
+async function inflateChildCohort(context, d, ptr, block, activeRequests) {
+  const co = d.pointer
+
+  const blk =
+    co.seq === ptr.seq && co.core === 0 && ptr.core === 0
+      ? block
+      : await context.getBlock(co.seq, co.core, activeRequests)
+
+  const cohort = blk.cohorts[co.offset]
+  const deltas = new Array(cohort.length)
+
+  for (let i = 0; i < cohort.length; i++) {
+    const c = cohort[i]
+    deltas[i] = inflateChildDelta(context, c, co, blk, activeRequests)
+  }
+
+  const p = new Pointer(context, co.core, co.seq, co.offset)
+  return new DeltaCohort(false, p, deltas)
+}

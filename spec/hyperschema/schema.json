@@ -2,7 +2,7 @@
   "version": 1,
   "schema": [
     {
-      "name": "tree-pointer",
+      "name": "tree-pointer-0",
       "namespace": "bee",
       "compact": true,
       "flagsPosition": -1,
@@ -28,26 +28,76 @@
       ]
     },
     {
-      "name": "value-pointer",
+      "name": "tree-pointer",
       "namespace": "bee",
       "compact": true,
-      "flagsPosition": 3,
+      "flagsPosition": 0,
       "fields": [
         {
           "name": "core",
-          "required": true,
           "type": "uint",
           "version": 1
         },
         {
           "name": "seq",
-          "required": true,
           "type": "uint",
           "version": 1
         },
         {
           "name": "offset",
-          "required": true,
+          "type": "uint",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "tree-delta",
+      "namespace": "bee",
+      "compact": true,
+      "flagsPosition": 0,
+      "fields": [
+        {
+          "name": "type",
+          "type": "uint3",
+          "version": 1
+        },
+        {
+          "name": "index",
+          "type": "uint8",
+          "version": 1
+        },
+        {
+          "name": "pointer",
+          "inline": true,
+          "type": "@bee/tree-pointer",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "cohort",
+      "namespace": "bee",
+      "array": true,
+      "type": "@bee/tree-delta"
+    },
+    {
+      "name": "value-pointer",
+      "namespace": "bee",
+      "compact": true,
+      "flagsPosition": 0,
+      "fields": [
+        {
+          "name": "core",
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "seq",
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "offset",
           "type": "uint",
           "version": 1
         },
@@ -99,6 +149,28 @@
       ]
     },
     {
+      "name": "tree-0",
+      "namespace": "bee",
+      "compact": true,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "keys",
+          "required": true,
+          "array": true,
+          "type": "@bee/tree-pointer-0",
+          "version": 1
+        },
+        {
+          "name": "children",
+          "required": true,
+          "array": true,
+          "type": "@bee/tree-pointer-0",
+          "version": 1
+        }
+      ]
+    },
+    {
       "name": "tree",
       "namespace": "bee",
       "compact": true,
@@ -108,14 +180,14 @@
           "name": "keys",
           "required": true,
           "array": true,
-          "type": "@bee/tree-pointer",
+          "type": "@bee/tree-delta",
           "version": 1
         },
         {
           "name": "children",
           "required": true,
           "array": true,
-          "type": "@bee/tree-pointer",
+          "type": "@bee/tree-delta",
           "version": 1
         }
       ]
@@ -159,6 +231,7 @@
         },
         {
           "name": "valuePointer",
+          "inline": true,
           "type": "@bee/value-pointer",
           "version": 1
         }
@@ -225,7 +298,7 @@
         {
           "name": "tree",
           "array": true,
-          "type": "@bee/tree",
+          "type": "@bee/tree-0",
           "version": 1
         },
         {
@@ -236,6 +309,21 @@
         },
         {
           "name": "cores",
+          "array": true,
+          "type": "@bee/core",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "metadata",
+      "namespace": "bee",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "cores",
+          "required": true,
           "array": true,
           "type": "@bee/core",
           "version": 1
@@ -272,9 +360,8 @@
           "version": 1
         },
         {
-          "name": "cores",
-          "array": true,
-          "type": "@bee/core",
+          "name": "metadata",
+          "type": "@bee/metadata",
           "version": 1
         },
         {
@@ -293,6 +380,12 @@
           "name": "values",
           "array": true,
           "type": "buffer",
+          "version": 1
+        },
+        {
+          "name": "cohorts",
+          "array": true,
+          "type": "@bee/cohort",
           "version": 1
         }
       ]
