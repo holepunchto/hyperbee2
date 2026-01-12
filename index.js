@@ -45,6 +45,10 @@ class Hyperbee {
     this.ready().catch(noop)
   }
 
+  static isHyperbee(bee) {
+    return bee instanceof Hyperbee
+  }
+
   head() {
     if (!this.root) return null
     if (this.root === EMPTY) return { length: 0, key: this.context.core.key }
