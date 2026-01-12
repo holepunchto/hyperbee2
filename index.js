@@ -182,7 +182,9 @@ class Hyperbee {
       children[i] = inflateChild(context, d, ptr, block, activeRequests)
     }
 
-    ptr.value = new TreeNode(await Promise.all(keys), await Promise.all(children))
+    const value = new TreeNode(await Promise.all(keys), await Promise.all(children))
+    if (!ptr.value) ptr.value = value
+
     this.bump(ptr)
 
     return ptr.value
