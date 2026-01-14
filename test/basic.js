@@ -269,6 +269,65 @@ test('basic cross link', async function (t) {
   t.alike((await db2.get(b4a.from('hello')))?.value, b4a.from('world'))
 })
 
+test('basic auto-update', async function (t) {
+  const db = await create(t)
+  await db.ready()
+
+  const db2 = await create(t, { key: db.core.key, autoUpdate: true })
+  await db2.ready()
+
+  const db3 = await create(t, { key: db.core.key, autoUpdate: false })
+  await db3.ready()
+
+  replicate(t, db, db2)
+  replicate(t, db, db3)
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('1'), b4a.from('1'))
+    await w.flush()
+  }
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('2'), b4a.from('2'))
+    await w.flush()
+  }
+
+  // event flush
+  await new Promise((resolve) => setTimeout(resolve, 100))
+
+  t.alike((await db2.get(b4a.from('1'))).value, b4a.from('1'))
+  t.alike((await db2.get(b4a.from('2'))).value, b4a.from('2'))
+
+  t.alike(await db3.get(b4a.from('1')), null)
+  t.alike(await db3.get(b4a.from('2')), null)
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('3'), b4a.from('3'))
+    w.tryPut(b4a.from('4'), b4a.from('4'))
+    await w.flush()
+  }
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('1'), b4a.from('1-updated'))
+    await w.flush()
+  }
+
+  // event flush
+  await new Promise((resolve) => setTimeout(resolve, 100))
+
+  t.alike((await db2.get(b4a.from('3'))).value, b4a.from('3'))
+  t.alike((await db2.get(b4a.from('4'))).value, b4a.from('4'))
+  t.alike((await db2.get(b4a.from('1'))).value, b4a.from('1-updated'))
+
+  t.alike(await db3.get(b4a.from('3')), null)
+  t.alike(await db3.get(b4a.from('4')), null)
+  t.alike(await db3.get(b4a.from('1')), null)
+})
+
 test('basic cross link (encrypted)', async function (t) {
   const db = await create(t, { encryption: { key: b4a.alloc(32) } })
 
