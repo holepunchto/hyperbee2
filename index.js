@@ -30,7 +30,8 @@ class Hyperbee {
       activeRequests = [],
       view = false,
       writable = true,
-      unbatch = 0
+      unbatch = 0,
+      autoUpdate = false
     } = options
 
     this.store = store
@@ -41,6 +42,8 @@ class Hyperbee {
     this.view = view
     this.writable = writable
     this.unbatch = unbatch
+
+    this._autoUpdate = autoUpdate
 
     this.ready().catch(noop)
   }
@@ -117,6 +120,12 @@ class Hyperbee {
       this.context.core.length === 0
         ? EMPTY
         : new TreeNodePointer(this.context, 0, this.core.length - 1, 0, false, null)
+
+    if (this._autoUpdate) {
+      this.core.on('append', () => {
+        this.update()
+      })
+    }
   }
 
   async close() {
