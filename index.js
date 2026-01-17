@@ -6,14 +6,7 @@ const { ChangesStream } = require('./lib/changes.js')
 const NodeCache = require('./lib/cache.js')
 const WriteBatch = require('./lib/write.js')
 const CoreContext = require('./lib/context.js')
-const {
-  Pointer,
-  KeyPointer,
-  ValuePointer,
-  TreeNode,
-  TreeNodePointer,
-  EMPTY
-} = require('./lib/tree.js')
+const { Pointer, KeyPointer, ValuePointer, TreeNode, EMPTY } = require('./lib/tree.js')
 const { DeltaOp, DeltaCohort, OP_COHORT } = require('./lib/compression.js')
 
 class Hyperbee {
@@ -22,10 +15,9 @@ class Hyperbee {
       t = 128, // legacy number for now, should be 128 now
       key = null,
       encryption = null,
-      core = key ? store.get(key) : store.get({ key, name: 'bee', encryption }),
-      context = new CoreContext(store, core, core, encryption, t),
       maxCacheSize = 4096,
-      cache = new NodeCache(maxCacheSize),
+      core = key ? store.get(key) : store.get({ key, name: 'bee', encryption }),
+      context = new CoreContext(store, core, new NodeCache(maxCacheSize), core, encryption, t),
       root = null,
       activeRequests = [],
       view = false,
@@ -36,7 +28,6 @@ class Hyperbee {
 
     this.store = store
     this.root = root
-    this.cache = cache
     this.context = context
     this.activeRequests = activeRequests
     this.view = view
@@ -56,6 +47,10 @@ class Hyperbee {
     if (!this.root) return null
     if (this.root === EMPTY) return { length: 0, key: this.context.core.key }
     return { length: this.root.seq + 1, key: this.root.context.core.key }
+  }
+
+  get cache() {
+    return this.context.cache
   }
 
   get core() {
@@ -85,7 +80,6 @@ class Hyperbee {
   _makeView(context, root, writable, unbatch) {
     return new Hyperbee(this.store, {
       context,
-      cache: this.cache,
       root,
       view: true,
       writable,
@@ -95,7 +89,7 @@ class Hyperbee {
 
   checkout({ length = this.core.length, key = null, writable = false } = {}) {
     const context = key ? this.context.getContextByKey(key) : this.context
-    const root = length === 0 ? EMPTY : new TreeNodePointer(context, 0, length - 1, 0, false, null)
+    const root = length === 0 ? EMPTY : context.createTreeNode(0, length - 1, 0, false, null)
     return this._makeView(context, root, writable, 0)
   }
 
@@ -119,7 +113,7 @@ class Hyperbee {
     this.root =
       this.context.core.length === 0
         ? EMPTY
-        : new TreeNodePointer(this.context, 0, this.core.length - 1, 0, false, null)
+        : this.context.createTreeNode(0, this.core.length - 1, 0, false, null)
 
     if (this._autoUpdate) {
       this.core.on('append', () => {
@@ -163,12 +157,12 @@ class Hyperbee {
 
   bump(ptr) {
     if (ptr.changed) return ptr.value
-    this.cache.bump(ptr)
-    this.cache.gc()
+    this.context.cache.bump(ptr)
+    this.context.cache.gc()
     return ptr.value
   }
 
-  // TODO: unslab these and parallize
+  // TODO: unslab these
   async inflate(ptr, activeRequests = this.activeRequests) {
     if (ptr.value) {
       this.bump(ptr)
@@ -268,7 +262,7 @@ class Hyperbee {
 
     if (expected === this.unbatch) {
       this.context = context
-      this.root = length === 0 ? EMPTY : new TreeNodePointer(context, 0, length - 1, 0, false, null)
+      this.root = length === 0 ? EMPTY : context.createTreeNode(0, length - 1, 0, false, null)
       this.unbatch = 0
     }
   }
@@ -370,7 +364,7 @@ function inflateChild(context, d, ptr, block, activeRequests) {
 
 function inflateChildDelta(context, d, ptr, block, activeRequests) {
   const p = d.pointer
-  const c = p && new TreeNodePointer(context, p.core, p.seq, p.offset, false, null)
+  const c = p && context.createTreeNode(p.core, p.seq, p.offset, false, null)
   return new DeltaOp(false, d.type, d.index, c)
 }
 
