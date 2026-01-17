@@ -34,6 +34,29 @@ test('basic (empty cache)', async function (t) {
   t.alike((await db.get(b4a.from('hello'))).value, b4a.from('world'))
 })
 
+test('basic, two batches', async function (t) {
+  const db = await create(t)
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('hello'), b4a.from('world'))
+    w.tryPut(b4a.from('hej'), b4a.from('verden'))
+    w.tryPut(b4a.from('hi'), b4a.from('ho'))
+    await w.flush()
+  }
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('hola'), b4a.from('mundo'))
+    await w.flush()
+  }
+
+  t.alike((await db.get(b4a.from('hi'))).value, b4a.from('ho'))
+  t.alike((await db.get(b4a.from('hej'))).value, b4a.from('verden'))
+  t.alike((await db.get(b4a.from('hello'))).value, b4a.from('world'))
+  t.alike((await db.get(b4a.from('hola'))).value, b4a.from('mundo'))
+})
+
 test('basic, bigger (empty cache)', async function (t) {
   const db = await create(t)
   const w = db.write()
