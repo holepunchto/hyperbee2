@@ -933,6 +933,7 @@ test('random fuzz (2k rounds)', async function (t) {
   t.timeout(120_000)
 
   const db = await create(t)
+  let cnt = 0
 
   const expected = new Map()
   const log = []
@@ -943,6 +944,7 @@ test('random fuzz (2k rounds)', async function (t) {
     log.push('{')
     log.push('  const w = db.write()')
     for (let j = 0; j < n; j++) {
+      cnt++
       const put = Math.random() < 0.8
       const k = b4a.from('' + ((Math.random() * 10_000) | 0))
       if (put) {
@@ -976,7 +978,10 @@ test('random fuzz (2k rounds)', async function (t) {
     actual.push(data.key)
   }
 
-  if (!alike(actual, sorted, {})) return
+  if (!alike(actual, sorted, {})) {
+    t.comment('ran ' + cnt + ' total ops')
+    return
+  }
 
   for (let i = 0; i < 10; i++) {
     const start = sorted[(Math.random() * sorted.length) | 0]
