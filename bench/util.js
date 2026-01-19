@@ -28,7 +28,11 @@ function formatNanoseconds(value) {
 }
 
 async function clearSandbox(path) {
-  await rm(path, { recursive: true })
+  try {
+    await rm(path, { recursive: true })
+  } catch (e) {
+    if (e.code !== 'ENOENT') throw e
+  }
   await mkdir(path, { recursive: true })
 }
 
