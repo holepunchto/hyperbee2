@@ -14,7 +14,7 @@
     "test": "node test/all.js",
     "test:bare": "bare test/all.js",
     "test:generate": "brittle -r test/all.js test/*.js",
-    "bench": "node bench/write.js && node bench/read.js"
+    "bench": "node bench/write.js && node bench/read.js && node bench/compression.js"
   },
   "dependencies": {
     "b4a": "^1.6.7",

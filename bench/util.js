@@ -10,21 +10,25 @@ function shuffle(arr) {
   }
 }
 
-function _pick1KUnit(units, value) {
+function _pickUnit(units, value, divisor = 1000, separator = '') {
   let m = 0
-  while (m < units.length - 1 && value > 1000) {
-    value = value / 1000
+  while (m < units.length - 1 && value >= divisor) {
+    value = value / divisor
     m++
   }
-  return value.toPrecision(3) + units[m]
+  return value.toPrecision(3) + separator + units[m]
 }
 
 function humanizeCount(count) {
-  return _pick1KUnit(['', 'K', 'M'], count)
+  return _pickUnit(['', 'K', 'M'], count)
+}
+
+function humanizeBytes(bytes) {
+  return _pickUnit(['B', 'KB', 'MB', 'GB'], bytes, 1024, ' ')
 }
 
 function formatNanoseconds(value) {
-  return _pick1KUnit(['ns', 'µs', 'ms', 's'], value)
+  return _pickUnit(['ns', 'µs', 'ms', 's'], value)
 }
 
 async function clearSandbox(path) {
@@ -49,4 +53,11 @@ function compareResults(rocks, hb2) {
   console.log()
 }
 
-module.exports = { shuffle, humanizeCount, formatNanoseconds, clearSandbox, compareResults }
+module.exports = {
+  shuffle,
+  humanizeCount,
+  humanizeBytes,
+  formatNanoseconds,
+  clearSandbox,
+  compareResults
+}

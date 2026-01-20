@@ -1,4 +1,4 @@
-// Write performance benchmarks
+// Read performance benchmarks
 const Hyperbee = require('../index.js')
 const Corestore = require('corestore')
 const { randomBytes } = require('crypto')
