@@ -31,7 +31,8 @@ async function runBenchmark({ count, keySize, valueSize, maxBlockSize = 300 }) {
     items.push([randomBytes(keySize), randomBytes(valueSize)])
   }
   // Sort items to batchs have a better chance of inserting into same block
-  items.sort((a, b) => Buffer.compare(a[0], b[0]))
+  const sorted = items.slice()
+  sorted.sort((a, b) => Buffer.compare(a[0], b[0]))
 
   // Generate batch sizes
   const batch_sizes = []
@@ -46,7 +47,7 @@ async function runBenchmark({ count, keySize, valueSize, maxBlockSize = 300 }) {
     c += size
   }
 
-  async function populateHyperbee2() {
+  async function populateHyperbee2(items) {
     await clearSandbox(HB2_PATH)
     const b = new Hyperbee(new Corestore(HB2_PATH))
     await b.ready()
@@ -65,13 +66,18 @@ async function runBenchmark({ count, keySize, valueSize, maxBlockSize = 300 }) {
     return b
   }
 
-  const b = await populateHyperbee2()
+  const b_random = await populateHyperbee2(items)
+  const info_random = await b_random.core.info()
+  await b_random.close()
 
-  const info = await b.core.info()
+  const b_ascending = await populateHyperbee2(sorted)
+  const info_ascending = await b_ascending.core.info()
+  await b_ascending.close()
+
   const insertedBytes = count * (keySize + valueSize)
 
-  console.table([
-    {
+  function makeColumns(items, info) {
+    return {
       Items: items.length,
       Batches: batch_sizes.length,
       Hypercore: humanizeBytes(info.byteLength),
@@ -79,9 +85,12 @@ async function runBenchmark({ count, keySize, valueSize, maxBlockSize = 300 }) {
       Overhead: humanizeBytes(info.byteLength - insertedBytes),
       Ratio: (info.byteLength / insertedBytes).toPrecision(5)
     }
-  ])
+  }
 
-  await b.close()
+  console.table({
+    random: makeColumns(items, info_random),
+    ascending: makeColumns(sorted, info_ascending)
+  })
 }
 
 async function run() {
