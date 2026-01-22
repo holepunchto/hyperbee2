@@ -501,3 +501,28 @@ test('basic seq, offset and core', async function (t) {
   t.not(a.seq, c.seq)
   t.not(b.seq, c.seq)
 })
+
+test('throws hypercore error if block not available', async function (t) {
+  t.plan(1)
+
+  const db = await create(t)
+  await db.ready()
+
+  const db2 = await create(t, { key: db.core.key, autoUpdate: true })
+  await db2.ready()
+
+  replicate(t, db, db2)
+
+  const w = db.write()
+  w.tryPut(b4a.from('a'), b4a.alloc(32))
+  await w.flush()
+
+  await new Promise((resolve) => setTimeout(resolve, 100))
+
+  try {
+    await db2.get(b4a.from('b'), { wait: false })
+    t.fail('should have failed')
+  } catch (error) {
+    t.is(error.code, 'BLOCK_NOT_AVAILABLE')
+  }
+})
