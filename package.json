@@ -1,6 +1,6 @@
 {
   "name": "hyperbee2",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "btree",
   "main": "index.js",
   "files": [
