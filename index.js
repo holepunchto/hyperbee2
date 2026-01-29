@@ -367,9 +367,10 @@ async function inflateKeyCohort(context, d, ptr, block, config) {
   return new DeltaCohort(false, p, await Promise.all(promises))
 }
 
-function inflateChild(context, d, ptr, block, config) {
+async function inflateChild(context, d, ptr, block, config) {
   if (d.type === OP_COHORT) return inflateChildCohort(context, d, ptr, block, config)
-  return Promise.resolve(inflateChildDelta(context, d, ptr, block, config))
+  if (d.pointer && !context.hasCore(d.pointer.core)) await context.update(config)
+  return inflateChildDelta(context, d, ptr, block, config)
 }
 
 function inflateChildDelta(context, d, ptr, block, config) {
@@ -391,6 +392,7 @@ async function inflateChildCohort(context, d, ptr, block, config) {
 
   for (let i = 0; i < cohort.length; i++) {
     const c = cohort[i]
+    if (c.pointer && !context.hasCore(c.pointer.core)) await context.update(config)
     deltas[i] = inflateChildDelta(context, c, co, blk, config)
   }
 
