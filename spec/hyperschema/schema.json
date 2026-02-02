@@ -40,7 +40,7 @@
         },
         {
           "name": "seq",
-          "type": "int",
+          "type": "uint",
           "version": 1
         },
         {

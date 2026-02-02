@@ -42,7 +42,7 @@ const encoding1 = {
     state.end++ // flags are fixed size
 
     if (m.core) c.uint.preencode(state, m.core)
-    if (m.seq) c.int.preencode(state, m.seq)
+    if (m.seq) c.uint.preencode(state, m.seq)
     if (m.offset) c.uint.preencode(state, m.offset)
   },
   encode(state, m) {
@@ -51,7 +51,7 @@ const encoding1 = {
     c.uint8.encode(state, flags)
 
     if (m.core) c.uint.encode(state, m.core)
-    if (m.seq) c.int.encode(state, m.seq)
+    if (m.seq) c.uint.encode(state, m.seq)
     if (m.offset) c.uint.encode(state, m.offset)
   },
   decode(state) {
@@ -59,7 +59,7 @@ const encoding1 = {
 
     return {
       core: (flags & 1) !== 0 ? c.uint.decode(state) : 0,
-      seq: (flags & 2) !== 0 ? c.int.decode(state) : 0,
+      seq: (flags & 2) !== 0 ? c.uint.decode(state) : 0,
       offset: (flags & 4) !== 0 ? c.uint.decode(state) : 0
     }
   }
@@ -69,12 +69,12 @@ const encoding1 = {
 const encoding1_inline = {
   preencode(state, m) {
     if (m.core) c.uint.preencode(state, m.core)
-    if (m.seq) c.int.preencode(state, m.seq)
+    if (m.seq) c.uint.preencode(state, m.seq)
     if (m.offset) c.uint.preencode(state, m.offset)
   },
   encode(state, m) {
     if (m.core) c.uint.encode(state, m.core)
-    if (m.seq) c.int.encode(state, m.seq)
+    if (m.seq) c.uint.encode(state, m.seq)
     if (m.offset) c.uint.encode(state, m.offset)
   },
   decode(state, inlining) {
@@ -82,7 +82,7 @@ const encoding1_inline = {
 
     return {
       core: (flags & 1) !== 0 ? c.uint.decode(state) : 0,
-      seq: (flags & 2) !== 0 ? c.int.decode(state) : 0,
+      seq: (flags & 2) !== 0 ? c.uint.decode(state) : 0,
       offset: (flags & 4) !== 0 ? c.uint.decode(state) : 0
     }
   }
