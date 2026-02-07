@@ -118,3 +118,49 @@ test('undo and write', async function (t) {
     ])
   }
 })
+
+test('move', async function (t) {
+  const db = await create(t)
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('1'), b4a.from('1'))
+    await w.flush()
+  }
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('2'), b4a.from('1'))
+    await w.flush()
+  }
+
+  const h = db.head()
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('3'), b4a.from('1'))
+    await w.flush()
+  }
+
+  db.move(h)
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('3'), b4a.from('1'))
+    await w.flush()
+  }
+
+  {
+    const all = []
+
+    for await (const { key, value } of db.createReadStream()) {
+      all.push({ key, value })
+    }
+
+    t.alike(all, [
+      { key: b4a.from('1'), value: b4a.from('1') },
+      { key: b4a.from('2'), value: b4a.from('1') },
+      { key: b4a.from('3'), value: b4a.from('1') }
+    ])
+  }
+})
