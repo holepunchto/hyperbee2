@@ -99,6 +99,14 @@ class Hyperbee {
     return this._makeView(context, root, writable, 0)
   }
 
+  move({ length = this.core.length, key = null, writable = this.writable } = {}) {
+    const context = key ? this.context.getContextByKey(key) : this.context
+    const root = length === 0 ? EMPTY : context.createTreeNode(0, length - 1, 0, false, null)
+    this.context = context
+    this.writable = writable
+    this.root = root
+  }
+
   snapshot() {
     return this._makeView(this.context, this.root, false, 0)
   }
