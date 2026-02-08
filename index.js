@@ -94,7 +94,9 @@ class Hyperbee extends EventEmitter {
       root,
       view: true,
       writable,
-      unbatch
+      unbatch,
+      autoUpdate: false,
+      preload: this.preload
     })
   }
 
