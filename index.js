@@ -1,5 +1,6 @@
 const b4a = require('b4a')
 const Hypercore = require('hypercore')
+const EventEmitter = require('events')
 const { RangeStream } = require('./lib/ranges.js')
 const { DiffStream } = require('./lib/diff.js')
 const { ChangesStream } = require('./lib/changes.js')
@@ -10,8 +11,10 @@ const SessionConfig = require('./lib/session-config.js')
 const { Pointer, KeyPointer, ValuePointer, TreeNode, EMPTY } = require('./lib/tree.js')
 const { DeltaOp, DeltaCohort, OP_COHORT } = require('./lib/compression.js')
 
-class Hyperbee {
+class Hyperbee extends EventEmitter {
   constructor(store, options = {}) {
+    super()
+
     const {
       t = 128, // legacy number for now, should be 128 now
       key = null,
@@ -27,7 +30,8 @@ class Hyperbee {
       view = false,
       writable = true,
       unbatch = 0,
-      autoUpdate = false
+      autoUpdate = false,
+      preload = null
     } = options
 
     this.store = store
@@ -38,7 +42,8 @@ class Hyperbee {
     this.writable = writable
     this.unbatch = unbatch
 
-    this._autoUpdate = autoUpdate
+    this.autoUpdate = autoUpdate
+    this.preload = preload
 
     this.ready().catch(noop)
   }
@@ -105,6 +110,7 @@ class Hyperbee {
     this.context = context
     this.writable = writable
     this.root = root
+    this.emit('update')
   }
 
   snapshot() {
@@ -123,22 +129,30 @@ class Hyperbee {
   async ready() {
     if (!this.core.opened) await this.core.ready()
     if (this.root) return
+    if (this.preload) await this.preload()
+    if (this.root) return
 
     this.root =
       this.context.core.length === 0
         ? EMPTY
         : this.context.createTreeNode(0, this.core.length - 1, 0, false, null)
 
-    if (this._autoUpdate) {
+    if (this.autoUpdate) {
       this.core.on('append', () => {
         this.update()
       })
     }
+
+    this.emit('ready')
   }
 
   async close() {
+    if (!this.root) await this.ready()
     if (this.config.activeRequests.length) Hypercore.clearRequests(this.config.activeRequests)
-    if (!this.view) await this.store.close()
+    if (this.view) return
+    if (this.store.closing) return this.store.close()
+    await this.store.close()
+    this.emit('close')
   }
 
   createReadStream(options) {
@@ -280,12 +294,14 @@ class Hyperbee {
       this.context = context
       this.root = length === 0 ? EMPTY : context.createTreeNode(0, length - 1, 0, false, null)
       this.unbatch = 0
+      this.emit('update')
     }
   }
 
   update(root = null) {
     this.root = root
     this.unbatch = 0
+    this.emit('update')
   }
 
   async get(key, opts) {

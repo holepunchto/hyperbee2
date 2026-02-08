@@ -1,13 +1,19 @@
 {
   "name": "hyperbee2",
   "version": "2.6.1",
-  "description": "btree",
+  "description": "Scalable P2P BTree",
   "main": "index.js",
   "files": [
     "index.js",
     "lib/*.js",
     "spec"
   ],
+  "imports": {
+    "events": {
+      "bare": "bare-events",
+      "default": "events"
+    }
+  },
   "scripts": {
     "format": "prettier . --write",
     "lint": "lunte && prettier . --check",
@@ -17,6 +23,7 @@
   },
   "dependencies": {
     "b4a": "^1.6.7",
+    "bare-events": "^2.8.2",
     "compact-encoding": "^2.16.1",
     "hypercore": "^11.15.0",
     "hypercore-errors": "^1.5.0",
