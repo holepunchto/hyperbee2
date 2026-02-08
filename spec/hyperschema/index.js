@@ -36,7 +36,7 @@ const encoding0 = {
   }
 }
 
-// @bee/tree-pointer
+// @bee/relative-tree-pointer
 const encoding1 = {
   preencode(state, m) {
     state.end++ // flags are fixed size
@@ -65,7 +65,7 @@ const encoding1 = {
   }
 }
 
-// @bee/tree-pointer (inline)
+// @bee/relative-tree-pointer (inline)
 const encoding1_inline = {
   preencode(state, m) {
     if (m.core) c.uint.preencode(state, m.core)
@@ -527,7 +527,7 @@ function getEncoding(name) {
   switch (name) {
     case '@bee/tree-pointer-0':
       return encoding0
-    case '@bee/tree-pointer':
+    case '@bee/relative-tree-pointer':
       return encoding1
     case '@bee/tree-delta':
       return encoding2

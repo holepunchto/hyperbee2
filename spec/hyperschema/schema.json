@@ -28,7 +28,7 @@
       ]
     },
     {
-      "name": "tree-pointer",
+      "name": "relative-tree-pointer",
       "namespace": "bee",
       "compact": true,
       "flagsPosition": 0,
@@ -69,7 +69,7 @@
         {
           "name": "pointer",
           "inline": true,
-          "type": "@bee/tree-pointer",
+          "type": "@bee/relative-tree-pointer",
           "version": 1
         }
       ]
