@@ -23,7 +23,7 @@ test.solo('basic network', async (t) => {
   await db2.ready()
   swarm2.join(db2.context.core.discoveryKey)
 
-  await db2.context.core.download({ start: 0, end: db.context.core.length }).done()
+  await db2.download()
 
   t.alike((await db.get(b4a.from('hello')))?.value, b4a.from('world'))
   t.alike((await db2.get(b4a.from('hello')))?.value, b4a.from('world'))
