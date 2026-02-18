@@ -352,8 +352,9 @@ test('basic auto-update', async function (t) {
 })
 
 test('autoUpdate defaults to true if not writable', async function (t) {
-  const db = await create(t)
+  const db = await create(t, { writable: true })
   await db.ready()
+  t.is(db.autoUpdate, false)
 
   const db2 = await create(t, { key: db.core.key, writable: true })
   t.is(db2.autoUpdate, false)
