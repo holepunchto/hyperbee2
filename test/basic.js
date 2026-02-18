@@ -351,6 +351,17 @@ test('basic auto-update', async function (t) {
   t.alike(await db3.get(b4a.from('1')), null)
 })
 
+test('autoUpdate defaults to true if not writable', async function (t) {
+  const db = await create(t)
+  await db.ready()
+
+  const db2 = await create(t, { key: db.core.key, writable: true })
+  t.is(db2.autoUpdate, false)
+
+  const db3 = await create(t, { key: db.core.key, writable: false })
+  t.is(db3.autoUpdate, true)
+})
+
 test('basic cross link (encrypted)', async function (t) {
   const db = await create(t, { encryption: { key: b4a.alloc(32) } })
 
