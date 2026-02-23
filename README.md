@@ -353,9 +353,10 @@ batch.tryPut(Buffer.from('key'), Buffer.from('value');
 await batch.flush();
 ```
 
-**Warning:** WriteBatch does not hold an exclusive lock on the database while
-queuing operations. The lock is only acquired when the operations are flushed.
-So be careful about building concurrent batches:
+**Warning:** WriteBatch does not hold an exclusive lock on the database
+while queuing operations unless you call `preLock()`. By default, the
+lock is only acquired when the operations are flushed. So be careful
+about building concurrent batches:
 
 ```js
 import Hyperbee from './index.js'
@@ -385,6 +386,12 @@ for await (const data of b.createReadStream(b)) {
 // email --> sleepy@example.com
 // name --> Sneezy
 ```
+
+### await preLock()
+
+Aquires an exclusive write lock now instead of waiting for `flush()`
+to be called. No writes will occur until this batch is closed allowing
+you to keep a consistent view of the database while building the batch.
 
 #### tryPut(key, value)
 
