@@ -389,61 +389,31 @@ for await (const data of b.createReadStream(b)) {
 #### tryPut(key, value)
 
 Queues an operation to associate `key` with `value`. Any existing entry
-for `key` will be overwritten.
+for `key` will be overwritten. Calling this on a closed batch will throw
+an error.
 
 #### tryDelete(key)
 
-Queues an operation to remove the entry with `key`, if it exists. If it
-does not exist, this method does nothing (and will not throw).
+Queues an operation to remove the entry with `key`, if it exists. If
+it does not exist, this method does nothing (and will not throw).
+Calling this on a closed batch will throw an error.
 
 #### tryClear()
 
-Queues an operation to clear all entries from the tree.
+Queues an operation to clear all entries from the tree. Calling this
+on a closed batch will throw an error.
 
 #### async flush()
 
-Aquires an exclusive write lock and applies the operations queued in this
-batch to the tree, clearing the queue.
+Aquires an exclusive write lock and applies the queued operations
+to the tree. After flushing successfully, the batch is closed.
 
-**Warning:** continuing to use the batch after flushing can cause unpredictable
-behavior. Batches applied after the first flush will be 'unapplied' if you
-flush again later. This can lead to accidentally removing data from the tree.
-
-```js
-import Hyperbee from './index.js'
-import Corestore from 'corestore'
-
-const b = new Hyperbee(new Corestore('./store'))
-await b.ready()
-
-const w1 = b.write()
-w1.tryPut(Buffer.from('name'), Buffer.from('Sneezy'))
-
-const w2 = b.write()
-w2.tryPut(Buffer.from('name'), Buffer.from('Sleepy'))
-w2.tryPut(Buffer.from('email'), Buffer.from('sleepy@example.com'))
-
-await w1.flush()
-await w2.flush()
-
-// Warning: flushing w1 again will unapply w2!
-w1.tryPut(Buffer.from('active'), Buffer.from('false'))
-await w1.flush()
-
-for await (const data of b.createReadStream(b)) {
-  console.log(data.key.toString(), '-->', data.value.toString())
-}
-
-// Output: (name has reverted to 'Sneezy', email is missing)
-//
-// active --> false
-// name --> Sneezy
-```
+Attempting to flush a closed batch will throw an error.
 
 #### close()
 
 Closes the batch without flushing operations. Subsequent attempts
-to flush the batch will result in an error.
+to queue operations or flush the batch will result in an error.
 
 [hypercore]: https://github.com/holepunchto/hypercore
 [corestore]: https://github.com/holepunchto/corestore
