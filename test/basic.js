@@ -526,3 +526,33 @@ test('throws hypercore error if block not available', async function (t) {
     t.is(error.code, 'BLOCK_NOT_AVAILABLE')
   }
 })
+
+test('preLock to avoid building concurrent batches', async function (t) {
+  const name = b4a.from('name')
+
+  const db = await create(t)
+  const w = db.write()
+  w.tryPut(name, b4a.from('world'))
+  await w.flush()
+
+  const w1 = db.write()
+  const p1 = (async () => {
+    await w1.preLock()
+    const entry = await db.get(name)
+    w1.tryPut(name, b4a.from(entry.value.toString() + '!'))
+    await w1.flush()
+  })()
+
+  const w2 = db.write()
+  const p2 = (async () => {
+    await w2.preLock()
+    const entry = await db.get(name)
+    w2.tryPut(name, b4a.from(entry.value.toString().toUpperCase()))
+    await w2.flush()
+  })()
+
+  await p1
+  await p2
+
+  t.alike((await db.get(name)).value, b4a.from('WORLD!'))
+})
