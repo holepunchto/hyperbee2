@@ -12,11 +12,28 @@ An append-only B-tree on top of a [Hypercore][hypercore].
 ## Usage
 
 ```js
-const Hyperbee2 = require('hyperbee2')
+import Hyperbee2 from 'hyperbee2'
+import Corestore from 'corestore'
 
-const db = new Hyperbee2(store)
+// Create/open tree
+const tree = new Hyperbee2(new Corestore('./mystore'))
 
-// see tests for more
+// Wait for tree to become available
+await tree.ready()
+
+// Write some values to tree
+const batch = tree.write()
+batch.tryPut(Buffer.from('name'), Buffer.from('example'))
+batch.tryPut(Buffer.from('email'), Buffer.from('example@example.com'))
+await batch.flush()
+
+// Read values from tree
+const name = await tree.get(Buffer.from('name'));
+const email = await tree.get(Buffer.from('email'));
+
+// Print values 
+console.log(name.value.toString());   // example
+console.log(email.value.toString());  // example@example.com
 ```
 
 ## License
