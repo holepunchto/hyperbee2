@@ -54,7 +54,7 @@ Ensures the underlying [Hypercore][hypercore] is ready and prepares the Hyperbee
 for use. If `autoUpdate` was set to true in the constructor's options,
 this will start watching the [Hypercore][hypercore] for new writes.
 
-Calling `get()` or `write()` will call this automatically for you.
+Calling `get()` will call this automatically for you.
 
 #### `await db.close()`
 
