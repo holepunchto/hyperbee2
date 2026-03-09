@@ -67,8 +67,8 @@ Returns an object with the following properties:
 
 ```
 {
-  length: 1,  // Number of blocks from the start of Hypercore that apply to this tree.
-  key: null,  // Buffer or null. The key of the underlying Hypercore.
+  length,  // Number of blocks from the start of Hypercore that apply to this tree.
+  key,     // Buffer or null. The key of the underlying Hypercore.
 }
 ```
 
@@ -196,11 +196,11 @@ Iterating over the stream will yield the following properties:
 
 ```js
 {
-  core: Hypercore(...),  // The hypercore the entry is stored in
-  offset: 0,             // The index of the entry in the block
-  seq: 0,                // The sequence number of the block in the hypercore
-  key: Buffer(...),      // The key of the entry
-  value: Buffer(...),    // The value of the entry
+  core,    // Hypercore: the hypercore the entry is stored in
+  offset,  // Number: the index of the entry in the block
+  seq,     // Number: the sequence number of the block in the hypercore
+  key,     // Buffer: the key of the entry
+  value,   // Buffer: the value of the entry
 }
 ```
 
@@ -292,17 +292,17 @@ Iterating over the stream will yield:
 ```js
 {
   head: {
-    length: 2,  // Number of blocks from the start of Hypercore
-                // that apply to this version of the tree.
-    key: null,  // Buffer or null. The key of the Hypercore for this version.
+    length,  // Number: number of blocks from the start of Hypercore
+             // that apply to this version of the tree
+    key,     // Buffer or null: the key of the Hypercore for this version
   },
   tail: {
-    length: 1,  // Number of blocks from the start of Hypercore
-                // that apply to the previous version of the tree.
-    key: null,  // Buffer or null. The key of the Hypercore for the previous
-                // version.
+    length,  // Number: number of blocks from the start of Hypercore
+             // that apply to the previous version of the tree
+    key,     // Buffer or null: the key of the Hypercore for the previous
+             // version
   },
-  batch: [      // Blocks written in this batch
+  batch: [   // Blocks written in this batch
     {tree, keys, values, cohorts, metadata, ...},
     ...
   ],
@@ -318,11 +318,11 @@ the following properties on success:
 
 ```js
 {
-  core: Hypercore(...),  // The hypercore the entry is stored in
-  offset: 0,             // The index of the entry in the block
-  seq: 0,                // The sequence number of the block in the hypercore
-  key: Buffer(...),      // The key of the entry
-  value: Buffer(...),    // The value of the entry
+  core,    // Hypercore: the hypercore the entry is stored in
+  offset,  // Number: the index of the entry in the block
+  seq,     // Number: the sequence number of the block in the hypercore
+  key,     // Buffer: the key of the entry
+  value,   // Buffer: the value of the entry
 }
 ```
 
@@ -346,11 +346,11 @@ the following properties on success:
 
 ```js
 {
-  core: Hypercore(...),  // The hypercore the entry is stored in
-  offset: 0,             // The index of the entry in the block
-  seq: 0,                // The sequence number of the block in the hypercore
-  key: Buffer(...),      // The key of the entry
-  value: Buffer(...),    // The value of the entry
+  core,    // Hypercore: the hypercore the entry is stored in
+  offset,  // Number: the index of the entry in the block
+  seq,     // Number: the sequence number of the block in the hypercore
+  key,     // Buffer: the key of the entry
+  value,   // Buffer: the value of the entry
 }
 ```
 
@@ -358,8 +358,8 @@ Options:
 
 ```js
 {
-  timeout: 0,  // Wait at most this many milliseconds (0 means no timeout)
-  wait: true,  // Wait for Hypercore to download blocks
+  timeout,  // Number: wait at most this many milliseconds (0 means no timeout)
+  wait,     // Boolean: wait for Hypercore to download blocks
 }
 ```
 
