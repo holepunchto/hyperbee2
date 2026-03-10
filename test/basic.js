@@ -526,3 +526,76 @@ test('throws hypercore error if block not available', async function (t) {
     t.is(error.code, 'BLOCK_NOT_AVAILABLE')
   }
 })
+
+test('emit update event after remote append to empty tree and autoUpdate = true', async function (t) {
+  let counter = 0
+  const db = await create(t, { autoUpdate: true })
+  db.on('update', () => counter++)
+
+  await db.ready()
+
+  // Manually append to underlying core
+  await db.core.append([
+    // w.tryPut(b4a.from('hello'), b4a.from('world'))
+    Buffer.fromHex('010000000c01011100010568656c6c6f0105776f726c64')
+  ])
+
+  const { promise, resolve } = Promise.withResolvers()
+  setTimeout(resolve, 0)
+
+  await promise
+  t.alike(counter, 1)
+})
+
+test('emit update event after remote append to non-empty tree and autoUpdate = true', async function (t) {
+  let counter = 0
+  const db = await create(t, { autoUpdate: true })
+  db.on('update', () => counter++)
+
+  await db.ready()
+
+  const w = db.write()
+  w.tryPut(b4a.from('hello'), b4a.from('world'))
+  await w.flush()
+
+  // Manually append to underlying core
+  await db.core.append([
+    // w.tryPut(b4a.from('hi'), b4a.from('ho'))
+    Buffer.fromHex('010000000d000001021159010100010268690102686f')
+  ])
+
+  const { promise, resolve } = Promise.withResolvers()
+  setTimeout(resolve, 0)
+
+  await promise
+  t.alike(counter, 2)
+})
+
+test('do not emit multiple update events when autoUpdate = true', async function (t) {
+  let counter = 0
+  const db = await create(t, { autoUpdate: true })
+  db.on('update', () => counter++)
+
+  await db.ready()
+
+  const w = db.write()
+  w.tryPut(b4a.from('hello'), b4a.from('world'))
+  await w.flush()
+
+  t.alike(counter, 1)
+})
+
+test('ensure head is set correctly immediately after flush', async function (t) {
+  const db = await create(t, { autoUpdate: true })
+
+  await db.ready()
+  const key = db.core.key
+
+  t.alike(db.head(), { length: 0, key })
+
+  const w = db.write()
+  w.tryPut(b4a.from('hello'), b4a.from('world'))
+  await w.flush()
+
+  t.alike(db.head(), { length: 1, key })
+})
