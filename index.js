@@ -41,6 +41,7 @@ class Hyperbee extends EventEmitter {
     this.view = view
     this.writable = writable
     this.unbatch = unbatch
+    this._lastUpdate = 0
 
     this.autoUpdate = autoUpdate
     this.preload = preload
@@ -303,7 +304,10 @@ class Hyperbee extends EventEmitter {
   update(root = null) {
     this.root = root
     this.unbatch = 0
-    this.emit('update')
+    if (this.core.length !== this._lastUpdate) {
+      this._lastUpdate = this.core.length
+      this.emit('update')
+    }
   }
 
   async get(key, opts) {
