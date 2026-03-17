@@ -567,7 +567,7 @@ test('emit update event after remote append to empty tree and autoUpdate = true'
   // Manually append to underlying core
   await db.core.append([
     // w.tryPut(b4a.from('hello'), b4a.from('world'))
-    Buffer.fromHex('010000000c01011100010568656c6c6f0105776f726c64')
+    b4a.from('010000000c01011100010568656c6c6f0105776f726c64', 'hex')
   ])
 
   const { promise, resolve } = Promise.withResolvers()
@@ -591,7 +591,7 @@ test('emit update event after remote append to non-empty tree and autoUpdate = t
   // Manually append to underlying core
   await db.core.append([
     // w.tryPut(b4a.from('hi'), b4a.from('ho'))
-    Buffer.fromHex('010000000d000001021159010100010268690102686f')
+    b4a.from('010000000d000001021159010100010268690102686f', 'hex')
   ])
 
   const { promise, resolve } = Promise.withResolvers()
