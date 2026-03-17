@@ -272,32 +272,32 @@ class Hyperbee extends EventEmitter {
   }
 
   async _rollback(config) {
-    const expected = this.unbatch
-
-    let n = expected
-    let length = this.root === EMPTY ? 0 : this.root.seq + 1
+    let seq = this.root.seq
     let context = this.context
+    let count = this.unbatch
 
-    while (n > 0 && length > 0 && expected === this.unbatch) {
-      const seq = length - 1
+    while (count) {
       const blk = await context.getBlock(seq, 0, config)
-
-      if (!blk.previous) {
-        length = 0
-        break
-      }
-
+      // TODO: should this be an error case? Attempting to
+      // rollback more batches than exist in the store seems like
+      // a programming error.
+      if (!blk.previous) break
+      seq = blk.previous.seq
       context = await context.getContext(blk.previous.core, config)
-      length = blk.previous.seq + 1
-      n--
+      count--
     }
 
-    if (expected === this.unbatch) {
-      this.context = context
-      this.root = length === 0 ? EMPTY : context.createTreeNode(0, length - 1, 0, false, null)
-      this.unbatch = 0
-      this.emit('update')
+    if (count) {
+      // TODO: should this be an error case? Attempting to
+      // rollback more batches than exist in the store seems like
+      // a programming error.
+      this.root = EMPTY
+    } else {
+      this.root = context.createTreeNode(0, seq, 0, false, null)
     }
+    this.context = context
+    this.unbatch = 0
+    this.emit('update')
   }
 
   update(root = null) {
