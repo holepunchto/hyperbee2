@@ -30,10 +30,9 @@ class Hyperbee extends EventEmitter {
       view = false,
       writable = true,
       unbatch = 0,
-      autoUpdate = false,
+      autoUpdate = !writable,
       preload = null
     } = options
-
     this.store = store
     this.root = root
     this.context = context
