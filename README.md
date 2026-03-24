@@ -44,7 +44,6 @@ Apache-2.0
 
 ### Hyperbee
 
-
 #### `const db = new Hyperbee(store, [options])`
 
 Make a new Hyperbee2 instance. The `store` argument expects a
