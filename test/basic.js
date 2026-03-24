@@ -556,3 +556,35 @@ test('lock to avoid building concurrent batches', async function (t) {
 
   t.alike((await db.get(name)).value, b4a.from('WORLD!'))
 })
+
+test('RangeIterator.prefetchNext with upper bound', async function (t) {
+  const db = await create(t)
+
+  function encodeUint32(n) {
+    const buf = new ArrayBuffer(4)
+    const view = new DataView(buf)
+    view.setUint32(0, n, false)
+    return b4a.from(buf)
+  }
+
+  const ENTRIES = 256
+
+  const w = db.write()
+  for (let i = 0; i < ENTRIES; i++) {
+    w.tryPut(encodeUint32(i), encodeUint32(i))
+  }
+  await w.flush()
+
+  const opt = {
+    prefetch: true,
+    lt: encodeUint32(ENTRIES),
+    // Needs a limit > minKeys to avoid early exit in prefetchNext
+    // (separate bug that can hide this one)
+    limit: ENTRIES * 2
+  }
+  let count = 0
+  for await (const _ of db.createReadStream(opt)) {
+    count++
+  }
+  t.alike(count, ENTRIES)
+})
