@@ -169,7 +169,7 @@ test('basic encrypted', async function (t) {
 
 test('basic get encrypted', async function (t) {
   const db = await create(t, {
-    getEncryption: () => ({
+    getEncryptionProvider: () => ({
       key: b4a.alloc(32, 'enc')
     })
   })
@@ -404,7 +404,7 @@ test('basic cross link (encryption+getEncryption)', async function (t) {
     await w.flush()
   }
 
-  const db2 = await create(t, { getEncryption: () => ({ key: b4a.alloc(32) }) })
+  const db2 = await create(t, { getEncryptionProvider: () => ({ key: b4a.alloc(32) }) })
 
   replicate(t, db, db2)
 
