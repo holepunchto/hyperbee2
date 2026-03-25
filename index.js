@@ -28,14 +28,12 @@ class Hyperbee extends EventEmitter {
       core = key
         ? store.get({ key, encryption: getEncryptionProvider(key) })
         : store.get({ key, name: 'bee', encryption: getEncryptionProvider(key) }),
-      context = new CoreContext(
-        store,
-        core,
-        new NodeCache(maxCacheSize),
+      context = new CoreContext(store, core, {
+        cache: new NodeCache(maxCacheSize),
         core,
         getEncryptionProvider,
         t
-      ),
+      }),
       root = null,
       view = false,
       writable = true,
@@ -438,5 +436,5 @@ async function inflateChildCohort(context, d, ptr, block, config) {
 
 function toEncryptionProvider(encryption) {
   if (encryption) return (key) => encryption
-  return null
+  return () => null
 }
