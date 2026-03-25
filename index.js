@@ -45,8 +45,8 @@ class Hyperbee extends EventEmitter {
     } = opts
 
     this.store = store
-    this.context = context
     this.root = root
+    this.context = context
     this.config = config.sub(activeRequests, timeout, wait)
     this.view = view
     this.writable = writable
