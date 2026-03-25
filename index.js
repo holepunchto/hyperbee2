@@ -33,7 +33,7 @@ class Hyperbee extends EventEmitter {
     const key = opts.key || null
 
     const getEncryptionProvider = (k) =>
-      opts.encryption || (opts.getEncryptionProvider ? opts.getEncryption(k) : null)
+      opts.encryption || (opts.getEncryption ? opts.getEncryption(k) : null)
 
     const encryption = getEncryptionProvider(key)
     const core = key ? store.get({ key: key, encryption }) : store.get({ name: 'bee', encryption })
