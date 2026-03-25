@@ -12,32 +12,36 @@ const { Pointer, KeyPointer, ValuePointer, TreeNode, EMPTY } = require('./lib/tr
 const { DeltaOp, DeltaCohort, OP_COHORT } = require('./lib/compression.js')
 
 class Hyperbee extends EventEmitter {
-  constructor(store, options = {}) {
+  constructor(store, opts = {}) {
     super()
 
     const {
       t = 128, // legacy number for now, should be 128 now
-      key = null,
-      getEncryption = null,
-      encryption = getEncryption ? getEncryption(key) : null,
       maxCacheSize = 4096,
       config = new SessionConfig([], 0, true),
       activeRequests = config.activeRequests,
       timeout = config.timeout,
       wait = config.wait,
-      core = key ? store.get({ key, encryption }) : store.get({ key, name: 'bee', encryption }),
-      context = new CoreContext(store, core, new NodeCache(maxCacheSize), core, encryption, t),
       root = null,
       view = false,
       writable = true,
       unbatch = 0,
       autoUpdate = false,
       preload = null
-    } = options
+    } = opts
+
+    this.key = opts.key || null
+    this.encryption = opts.encryption || (opts.getEncryption ? opts.getEncryption(this.key) : null)
+
+    const core = this.key
+      ? store.get({ key: this.key, encryption: this.encryption })
+      : store.get({ name: 'bee', encryption: this.encryption })
+    this.context =
+      opts.context ||
+      new CoreContext(store, core, new NodeCache(maxCacheSize), core, this.encryption, t)
 
     this.store = store
     this.root = root
-    this.context = context
     this.config = config.sub(activeRequests, timeout, wait)
     this.view = view
     this.writable = writable
