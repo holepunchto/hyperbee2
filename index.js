@@ -18,13 +18,14 @@ class Hyperbee extends EventEmitter {
     const {
       t = 128, // legacy number for now, should be 128 now
       key = null,
-      encryption = null,
+      getEncryption = null,
+      encryption = getEncryption ? getEncryption(key) : null,
       maxCacheSize = 4096,
       config = new SessionConfig([], 0, true),
       activeRequests = config.activeRequests,
       timeout = config.timeout,
       wait = config.wait,
-      core = key ? store.get(key) : store.get({ key, name: 'bee', encryption }),
+      core = key ? store.get({ key, encryption }) : store.get({ key, name: 'bee', encryption }),
       context = new CoreContext(store, core, new NodeCache(maxCacheSize), core, encryption, t),
       root = null,
       view = false,
