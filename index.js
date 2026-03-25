@@ -12,27 +12,37 @@ const { Pointer, KeyPointer, ValuePointer, TreeNode, EMPTY } = require('./lib/tr
 const { DeltaOp, DeltaCohort, OP_COHORT } = require('./lib/compression.js')
 
 class Hyperbee extends EventEmitter {
-  constructor(store, options = {}) {
+  constructor(store, opts = {}) {
     super()
 
     const {
       t = 128, // legacy number for now, should be 128 now
       key = null,
       encryption = null,
+      getEncryptionProvider = toEncryptionProvider(encryption),
       maxCacheSize = 4096,
       config = new SessionConfig([], 0, true),
       activeRequests = config.activeRequests,
       timeout = config.timeout,
       wait = config.wait,
-      core = key ? store.get(key) : store.get({ key, name: 'bee', encryption }),
-      context = new CoreContext(store, core, new NodeCache(maxCacheSize), core, encryption, t),
+      core = key
+        ? store.get({ key, encryption: getEncryptionProvider(key) })
+        : store.get({ key, name: 'bee', encryption: getEncryptionProvider(key) }),
+      context = new CoreContext(
+        store,
+        core,
+        new NodeCache(maxCacheSize),
+        core,
+        getEncryptionProvider,
+        t
+      ),
       root = null,
       view = false,
       writable = true,
       unbatch = 0,
       autoUpdate = false,
       preload = null
-    } = options
+    } = opts
 
     this.store = store
     this.root = root
@@ -424,4 +434,9 @@ async function inflateChildCohort(context, d, ptr, block, config) {
 
   const p = new Pointer(context, co.core, co.seq, co.offset)
   return new DeltaCohort(false, p, deltas)
+}
+
+function toEncryptionProvider(encryption) {
+  if (encryption) return (key) => encryption
+  return () => null
 }
