@@ -17,11 +17,25 @@ class Hyperbee extends EventEmitter {
 
     const {
       t = 128, // legacy number for now, should be 128 now
+      key = null,
+      encryption = null,
+      getEncryptionProvider = toEncryptionProvider(encryption),
       maxCacheSize = 4096,
       config = new SessionConfig([], 0, true),
       activeRequests = config.activeRequests,
       timeout = config.timeout,
       wait = config.wait,
+      core = key
+        ? store.get({ key, encryption: getEncryptionProvider(key) })
+        : store.get({ key, name: 'bee', encryption: getEncryptionProvider(key) }),
+      context = new CoreContext(
+        store,
+        core,
+        new NodeCache(maxCacheSize),
+        core,
+        getEncryptionProvider,
+        t
+      ),
       root = null,
       view = false,
       writable = true,
@@ -30,24 +44,8 @@ class Hyperbee extends EventEmitter {
       preload = null
     } = opts
 
-    const key = opts.key || null
-
-    const getEncryptionProvider = (k) =>
-      opts.encryption || (opts.getEncryptionProvider ? opts.getEncryptionProvider(k) : null)
-
-    const encryption = getEncryptionProvider(key)
-    const core = key ? store.get({ key: key, encryption }) : store.get({ name: 'bee', encryption })
-
-    this.context =
-      opts.context ||
-      new CoreContext(store, core, {
-        cache: new NodeCache(maxCacheSize),
-        core,
-        getEncryptionProvider,
-        t
-      })
-
     this.store = store
+    this.context = context
     this.root = root
     this.config = config.sub(activeRequests, timeout, wait)
     this.view = view
@@ -436,4 +434,9 @@ async function inflateChildCohort(context, d, ptr, block, config) {
 
   const p = new Pointer(context, co.core, co.seq, co.offset)
   return new DeltaCohort(false, p, deltas)
+}
+
+function toEncryptionProvider(encryption) {
+  if (encryption) return (key) => encryption
+  return null
 }
