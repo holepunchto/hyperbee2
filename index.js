@@ -42,7 +42,7 @@ class Hyperbee extends EventEmitter {
       new CoreContext(store, core, {
         cache: new NodeCache(maxCacheSize),
         core,
-        getEncryption: getEncryption,
+        encryption: getEncryption,
         t
       })
 
