@@ -28,12 +28,14 @@ class Hyperbee extends EventEmitter {
       core = key
         ? store.get({ key, encryption: getEncryptionProvider(key) })
         : store.get({ key, name: 'bee', encryption: getEncryptionProvider(key) }),
-      context = new CoreContext(store, core, {
-        cache: new NodeCache(maxCacheSize),
+      context = new CoreContext(
+        store,
+        core,
+        new NodeCache(maxCacheSize),
         core,
         getEncryptionProvider,
         t
-      }),
+      ),
       root = null,
       view = false,
       writable = true,
