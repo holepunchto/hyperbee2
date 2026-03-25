@@ -32,9 +32,10 @@ class Hyperbee extends EventEmitter {
 
     const key = opts.key || null
 
-    const getEncryption = (k) =>
-      opts.encryption || (opts.getEncryption ? opts.getEncryption(k) : null)
-    const encryption = getEncryption(key)
+    const getEncryptionProvider = (k) =>
+      opts.encryption || (opts.getEncryptionProvider ? opts.getEncryption(k) : null)
+
+    const encryption = getEncryptionProvider(key)
     const core = key ? store.get({ key: key, encryption }) : store.get({ name: 'bee', encryption })
 
     this.context =
@@ -42,7 +43,7 @@ class Hyperbee extends EventEmitter {
       new CoreContext(store, core, {
         cache: new NodeCache(maxCacheSize),
         core,
-        getEncryptionProvider: getEncryption,
+        getEncryptionProvider,
         t
       })
 
