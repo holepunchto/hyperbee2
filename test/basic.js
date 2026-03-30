@@ -370,7 +370,7 @@ test('basic auto-update', async function (t) {
   t.alike(await db3.get(b4a.from('1')), null)
 })
 
-test('autoUpdate defaults are correct', async function (t) {
+test.solo('autoUpdate defaults are correct', async function (t) {
   const db = await create(t, { writable: true })
   await db.ready()
   t.is(db.autoUpdate, false)
@@ -379,6 +379,7 @@ test('autoUpdate defaults are correct', async function (t) {
   t.is(db2.autoUpdate, false)
 
   const db3 = await create(t, { key: db.core.key, writable: false })
+  await db3.ready()
   t.is(db3.autoUpdate, true)
 
   // views
