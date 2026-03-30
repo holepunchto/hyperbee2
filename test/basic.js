@@ -385,8 +385,8 @@ test.solo('autoUpdate defaults are correct', async function (t) {
   const snap = db3.snapshot()
   t.is(snap.autoUpdate, false)
 
-  // const db4 = await create(t, { key: db.core.key, writable: false, view: true })
-  // t.is(db4.autoUpdate, false)
+  const db4 = await create(t, { key: db.core.key, writable: false, view: true })
+  t.is(db4.autoUpdate, false)
 
   await snap.close()
 })
