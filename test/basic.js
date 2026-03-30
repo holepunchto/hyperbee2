@@ -167,6 +167,25 @@ test('basic encrypted', async function (t) {
   }
 })
 
+test('basic get encrypted', async function (t) {
+  const db = await create(t, {
+    getEncryptionProvider: () => ({
+      key: b4a.alloc(32, 'enc')
+    })
+  })
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('PLAINTEXT'), b4a.from('PLAINTEXT'))
+    await w.flush()
+  }
+
+  for (let i = 0; i < db.core.length; i++) {
+    const blk = await db.core.get(i, { raw: true })
+    t.ok(b4a.toString(blk).indexOf('PLAINTEXT') === -1)
+  }
+})
+
 test('big overwrite', async function (t) {
   const db = await create(t)
 
@@ -387,6 +406,30 @@ test('basic cross link (encrypted)', async function (t) {
   t.alike((await db2.get(b4a.from('hello')))?.value, b4a.from('world'))
 })
 
+test('basic cross link (encryption+getEncryption)', async function (t) {
+  const db = await create(t, { encryption: { key: b4a.alloc(32) } })
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('hello'), b4a.from('world'))
+    w.tryPut(b4a.from('hej'), b4a.from('verden'))
+    await w.flush()
+  }
+
+  const db2 = await create(t, { getEncryptionProvider: () => ({ key: b4a.alloc(32) }) })
+
+  replicate(t, db, db2)
+
+  {
+    const w = db2.write(db.head())
+    w.tryPut(b4a.from('hej'), b4a.from('verden*'))
+    await w.flush()
+  }
+
+  t.alike((await db2.get(b4a.from('hej')))?.value, b4a.from('verden*'))
+  t.alike((await db2.get(b4a.from('hello')))?.value, b4a.from('world'))
+})
+
 test('changes', async function (t) {
   const db = await create(t)
 
@@ -537,4 +580,66 @@ test('throws hypercore error if block not available', async function (t) {
   } catch (error) {
     t.is(error.code, 'BLOCK_NOT_AVAILABLE')
   }
+})
+
+test('lock to avoid building concurrent batches', async function (t) {
+  const name = b4a.from('name')
+
+  const db = await create(t)
+  const w = db.write()
+  w.tryPut(name, b4a.from('world'))
+  await w.flush()
+
+  const w1 = db.write()
+  const p1 = (async () => {
+    await w1.lock()
+    const entry = await db.get(name)
+    w1.tryPut(name, b4a.from(entry.value.toString() + '!'))
+    await w1.flush()
+  })()
+
+  const w2 = db.write()
+  const p2 = (async () => {
+    await w2.lock()
+    const entry = await db.get(name)
+    w2.tryPut(name, b4a.from(entry.value.toString().toUpperCase()))
+    await w2.flush()
+  })()
+
+  await p1
+  await p2
+
+  t.alike((await db.get(name)).value, b4a.from('WORLD!'))
+})
+
+test('RangeIterator.prefetchNext with upper bound', async function (t) {
+  const db = await create(t)
+
+  function encodeUint32(n) {
+    const buf = new ArrayBuffer(4)
+    const view = new DataView(buf)
+    view.setUint32(0, n, false)
+    return b4a.from(buf)
+  }
+
+  const ENTRIES = 256
+
+  const w = db.write()
+  for (let i = 0; i < ENTRIES; i++) {
+    w.tryPut(encodeUint32(i), encodeUint32(i))
+  }
+  await w.flush()
+
+  const opt = {
+    prefetch: true,
+    lt: encodeUint32(ENTRIES),
+    // Needs a limit > minKeys to avoid early exit in prefetchNext
+    // (separate bug that can hide this one)
+    limit: ENTRIES * 2
+  }
+  let count = 0
+  for await (const _ of db.createReadStream(opt)) {
+    count++
+  }
+  t.alike(count, ENTRIES)
 })
