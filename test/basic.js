@@ -370,7 +370,7 @@ test('basic auto-update', async function (t) {
   t.alike(await db3.get(b4a.from('1')), null)
 })
 
-test('autoUpdate defaults to true if not writable', async function (t) {
+test.solo('autoUpdate defaults are correct', async function (t) {
   const db = await create(t, { writable: true })
   await db.ready()
   t.is(db.autoUpdate, false)
@@ -380,6 +380,13 @@ test('autoUpdate defaults to true if not writable', async function (t) {
 
   const db3 = await create(t, { key: db.core.key, writable: false })
   t.is(db3.autoUpdate, true)
+
+  // views
+  const snap = db3.snapshot()
+  t.is(snap.autoUpdate, false)
+
+  const db4 = await create(t, { key: db.core.key, writable: false, view: true })
+  t.is(db4.autoUpdate, false)
 })
 
 test('basic cross link (encrypted)', async function (t) {
