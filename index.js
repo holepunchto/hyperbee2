@@ -117,12 +117,9 @@ class Hyperbee extends EventEmitter {
   }
 
   move({ length = this.core.length, key = null, writable = this.writable } = {}) {
-    const context = key ? this.context.getContextByKey(key) : this.context
-    const root = length === 0 ? EMPTY : context.createTreeNode(0, length - 1, 0, false, null)
-    this.context = context
+    this.context = key ? this.context.getContextByKey(key) : this.context
     this.writable = writable
-    this.root = root
-    this.emit('update')
+    this._setRoot(this._nodeAtSeq(length - 1), true)
   }
 
   snapshot() {
@@ -138,21 +135,23 @@ class Hyperbee extends EventEmitter {
     return new WriteBatch(this, opts)
   }
 
+  _lastNodeInCore() {
+    return this._nodeAtSeq(this.context.core.length - 1)
+  }
+
+  _nodeAtSeq(seq) {
+    return seq < 0 ? EMPTY : this.context.createTreeNode(0, seq, 0, false, null)
+  }
+
   async ready() {
     if (!this.core.opened) await this.core.ready()
     if (this.root) return
     if (this.preload) await this.preload()
     if (this.root) return
 
-    this.root =
-      this.context.core.length === 0
-        ? EMPTY
-        : this.context.createTreeNode(0, this.core.length - 1, 0, false, null)
-
+    this._setRoot(this._lastNodeInCore(), false)
     if (this.autoUpdate) {
-      this.core.on('append', () => {
-        this.update()
-      })
+      this.core.on('append', () => this._setRoot(this._lastNodeInCore(), true))
     }
 
     this.emit('ready')
@@ -251,16 +250,16 @@ class Hyperbee extends EventEmitter {
 
     if (expected === this.unbatch) {
       this.context = context
-      this.root = length === 0 ? EMPTY : context.createTreeNode(0, length - 1, 0, false, null)
-      this.unbatch = 0
-      this.emit('update')
+      this._setRoot(this._nodeAtSeq(length - 1), true)
     }
   }
 
-  update(root = null) {
-    this.root = root
+  _setRoot(root, emit) {
+    if (!root.equivalentTo(this.root)) {
+      this.root = root
+      if (emit) this.emit('update')
+    }
     this.unbatch = 0
-    this.emit('update')
   }
 
   async get(key, opts) {
