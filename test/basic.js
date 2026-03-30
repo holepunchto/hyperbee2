@@ -370,7 +370,7 @@ test('basic auto-update', async function (t) {
   t.alike(await db3.get(b4a.from('1')), null)
 })
 
-test.solo('autoUpdate defaults are correct', async function (t) {
+test('autoUpdate defaults are correct', async function (t) {
   const db = await create(t, { writable: true })
   await db.ready()
   t.is(db.autoUpdate, false)
