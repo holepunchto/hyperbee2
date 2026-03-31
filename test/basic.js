@@ -830,3 +830,34 @@ test('RangeIterator.prefetchNext with upper bound', async function (t) {
   }
   t.alike(count, ENTRIES)
 })
+
+test('trace', async function (t) {
+  const db = await create(t)
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('hello'), b4a.from('world'))
+    await w.flush()
+  }
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('hej'), b4a.from('verden'))
+    await w.flush()
+  }
+
+  db.cache.empty()
+  const seqs = new Set()
+
+  const stream = db.createReadStream({
+    trace(core, seq) {
+      seqs.add(seq)
+    }
+  })
+
+  for await (const _ of stream) {
+    // do nothing
+  }
+
+  t.alike(seqs, new Set([0, 1]))
+})
