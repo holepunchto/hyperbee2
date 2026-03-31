@@ -21,10 +21,11 @@ class Hyperbee extends EventEmitter {
       encryption = null,
       getEncryptionProvider = toEncryptionProvider(encryption),
       maxCacheSize = 4096,
-      config = new SessionConfig([], 0, true),
+      config = new SessionConfig([], 0, true, null),
       activeRequests = config.activeRequests,
       timeout = config.timeout,
       wait = config.wait,
+      trace = config.trace,
       core = key
         ? store.get({ key, encryption: getEncryptionProvider(key) })
         : store.get({ key, name: 'bee', encryption: getEncryptionProvider(key) }),
@@ -47,7 +48,7 @@ class Hyperbee extends EventEmitter {
     this.store = store
     this.root = root
     this.context = context
-    this.config = config.sub(activeRequests, timeout, wait)
+    this.config = config.sub(activeRequests, timeout, wait, trace)
     this.view = view
     this.writable = writable
     this.unbatch = unbatch
