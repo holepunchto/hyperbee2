@@ -278,9 +278,6 @@ class Hyperbee extends EventEmitter {
 
     while (count) {
       const blk = await context.getBlock(seq, 0, config)
-      // TODO: should this be an error case? Attempting to
-      // rollback more batches than exist in the store seems like
-      // a programming error.
       if (!blk.previous) break
       seq = blk.previous.seq
       context = await context.getContext(blk.previous.core, config)
@@ -288,9 +285,7 @@ class Hyperbee extends EventEmitter {
     }
 
     if (count) {
-      // TODO: should this be an error case? Attempting to
-      // rollback more batches than exist in the store seems like
-      // a programming error.
+      // There was an attempt to rollback more batches than exist.
       this.root = EMPTY
     } else {
       this.root = context.createTreeNode(0, seq, 0, false, null)
