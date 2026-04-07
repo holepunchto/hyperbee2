@@ -11,6 +11,7 @@ async function runTests() {
   await import('./diff.js')
   await import('./fuzz.js')
   await import('./undo.js')
+  await import('./compression.js')
 
   test.resume()
 }
