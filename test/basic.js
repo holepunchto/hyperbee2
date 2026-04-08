@@ -861,3 +861,29 @@ test('trace', async function (t) {
 
   t.alike(seqs, new Set([0, 1]))
 })
+
+test('checkout at root', async function (t) {
+  const db = await create(t)
+  await db.ready()
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('hello'), b4a.from('world'))
+    await w.flush()
+  }
+
+  const head = db.head()
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('hello'), b4a.from('goodbye'))
+    await w.flush()
+  }
+
+  db.move(head)
+
+  const checkout = db.checkout({ length: -1 })
+  t.alike((await checkout.get(b4a.from('hello'))).value, b4a.from('world'))
+
+  await checkout.close()
+})
