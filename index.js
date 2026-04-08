@@ -111,15 +111,16 @@ class Hyperbee extends EventEmitter {
     })
   }
 
-  checkout({ log, length = this.core.length, key = null, writable = false } = {}) {
+  checkout({ root = false, length = this.core.length, key = null, writable = false } = {}) {
     const context = key ? this.context.getContextByKey(key) : this.context
-    const root = length === 0
-      ? EMPTY
-      : length === -1
-        ? this.root
-        : context.createTreeNode(0, length - 1, 0, false, null)
+    const rootNode =
+      length === 0
+        ? EMPTY
+        : root
+          ? this.root
+          : context.createTreeNode(0, length - 1, 0, false, null)
 
-    return this._makeView(context, root, writable, 0)
+    return this._makeView(context, rootNode, writable, 0)
   }
 
   move({ length = this.core.length, key = null, writable = this.writable } = {}) {

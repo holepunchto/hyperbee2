@@ -882,7 +882,7 @@ test('checkout at root', async function (t) {
 
   db.move(head)
 
-  const checkout = db.checkout({ length: -1 })
+  const checkout = db.checkout({ root: true })
   t.alike((await checkout.get(b4a.from('hello'))).value, b4a.from('world'))
 
   await checkout.close()
