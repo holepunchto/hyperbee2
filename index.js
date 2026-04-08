@@ -111,9 +111,14 @@ class Hyperbee extends EventEmitter {
     })
   }
 
-  checkout({ length = this.core.length, key = null, writable = false } = {}) {
+  checkout({ log, length = this.core.length, key = null, writable = false } = {}) {
     const context = key ? this.context.getContextByKey(key) : this.context
-    const root = length === 0 ? EMPTY : context.createTreeNode(0, length - 1, 0, false, null)
+    const root = length === 0
+      ? EMPTY
+      : length === -1
+        ? this.root
+        : context.createTreeNode(0, length - 1, 0, false, null)
+
     return this._makeView(context, root, writable, 0)
   }
 
