@@ -137,7 +137,10 @@ class Hyperbee extends EventEmitter {
   }
 
   update(root = null) {
-    if (root === null) root = this._lastNodeInCore()
+    if (root === null) {
+      if (this.context.lock.locked) return
+      root = this._lastNodeInCore()
+    }
     this._setRoot(root, true)
   }
 
