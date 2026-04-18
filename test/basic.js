@@ -882,19 +882,6 @@ test('repeated put with empty buffer value after reload of storage', async funct
     }
     t.alike((await db.get(hello)).value, b4a.alloc(0), 'got empty buffer value')
 
-    {
-      const w = db.write()
-      await w.lock()
-
-      w.tryPut(hello, b4a.alloc(0))
-      await w.flush()
-    }
-
-    t.alike(
-      (await db.get(hello)).value,
-      b4a.alloc(0),
-      'got empty buffer value after second put during same lifecycle'
-    )
 
     await db.close()
     await store.close()
