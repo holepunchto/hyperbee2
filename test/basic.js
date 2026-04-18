@@ -864,7 +864,6 @@ test('trace', async function (t) {
   t.alike(seqs, new Set([0, 1]))
 })
 
-
 test('repeated put with empty buffer value after reload of storage', async function (t) {
   const storage = await t.tmp()
   const hello = b4a.from('hello')
@@ -905,4 +904,19 @@ test('repeated put with empty buffer value after reload of storage', async funct
     await db.close()
     await store.close()
   }
+})
+
+test('autoUpdate doesnt lose data', async function (t) {
+  const db = await create(t, { autoUpdate: true })
+  await db.ready()
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('1'), b4a.from('1'))
+    w.tryPut(b4a.from('2'), b4a.from('2'))
+    await w.flush()
+  }
+
+  t.alike((await db.get(b4a.from('1'))).value, b4a.from('1'))
+  t.alike((await db.get(b4a.from('2'))).value, b4a.from('2'))
 })
