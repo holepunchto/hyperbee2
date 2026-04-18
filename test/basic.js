@@ -881,7 +881,6 @@ test('repeated put with empty buffer value after reload of storage', async funct
     }
     t.alike((await db.get(hello)).value, b4a.alloc(0), 'got empty buffer value')
 
-
     await db.close()
     await store.close()
   }
