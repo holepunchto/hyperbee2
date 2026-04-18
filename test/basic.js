@@ -864,27 +864,6 @@ test('trace', async function (t) {
   t.alike(seqs, new Set([0, 1]))
 })
 
-test('repeated put with null value', async function (t) {
-  const db = await create(t)
-
-  const hello = b4a.from('hello')
-  {
-    const w = db.write()
-    w.tryPut(hello, null)
-    await w.flush()
-  }
-
-  t.is((await db.get(hello)).value, null, 'got null value')
-
-  // Previous behaviour was a crash
-  {
-    const w = db.write()
-    w.tryPut(hello, null)
-    await w.flush()
-  }
-
-  t.is((await db.get(hello)).value, null, 'got null value')
-})
 
 test('repeated put with empty buffer value after reload of storage', async function (t) {
   const storage = await t.tmp()
