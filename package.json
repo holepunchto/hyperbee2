@@ -1,6 +1,6 @@
 {
   "name": "hyperbee2",
-  "version": "2.9.3",
+  "version": "2.9.4",
   "description": "Scalable P2P BTree",
   "main": "index.js",
   "files": [
