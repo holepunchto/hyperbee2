@@ -311,7 +311,7 @@ class Hyperbee extends EventEmitter {
   async _reduceRange(ptr, name, reduce, start, end) {
     const v = ptr.value ? this.bump(ptr) : await this.inflate(ptr, this.config)
 
-    const current = []
+    const values = []
     const subtrees = []
 
     let i = 0
@@ -327,11 +327,11 @@ class Hyperbee extends EventEmitter {
     while (i < v.keys.length) {
       const data = v.keys.get(i)
       if (end && b4a.compare(data.key, end) >= 0) break
-      current.push(data)
+      values.push(data)
       i++
     }
-    if (current.length) {
-      subtrees.push(reduce(current, false))
+    if (values.length) {
+      subtrees.push(reduce(values, false))
     }
 
     if (v.children.length) {
@@ -390,9 +390,8 @@ class Hyperbee extends EventEmitter {
     // Values stored at this node
     const values = []
     for (let i = 0, len = v.keys.length; i < len; i++) {
-      const k = v.keys.get(i)
-      // TODO: test valuePointer?
-      values.push(k.value)
+      const data = v.keys.get(i)
+      values.push(data)
     }
 
     // Store results to combine later
@@ -401,7 +400,6 @@ class Hyperbee extends EventEmitter {
     // Results for child nodes
     for (let i = 0, len = v.children.length; i < len; i++) {
       const c = v.children.get(i)
-      // TODO: avoid recursion?
       rereduce.push(await this._reduce(c, name, reduce))
     }
 

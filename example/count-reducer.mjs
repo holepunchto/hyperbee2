@@ -1,5 +1,6 @@
-import Hyperbee from './index.js'
+import Hyperbee from '../index.js'
 import Corestore from 'corestore'
+import path from 'node:path'
 
 const count = (values, rereduce) => {
   if (rereduce) {
@@ -13,7 +14,8 @@ const count = (values, rereduce) => {
 
 const reducers = { count }
 
-const b = new Hyperbee(new Corestore('./sandbox/reducer'))
+const storePath = path.resolve(import.meta.dirname, '../sandbox/count-reducer')
+const b = new Hyperbee(new Corestore(storePath))
 
 await b.ready()
 
@@ -43,4 +45,12 @@ async function timeIt(f) {
 }
 
 console.log('Time query of count reducer')
-timeIt(async () => await b.reduce('count', count))
+await timeIt(async () => await b.reduce('count', count))
+
+console.log('Time query of count reducer over range')
+await timeIt(
+  async () => await b.reduceRange('count', count, Buffer.from('#250_000'), Buffer.from('#750_000'))
+)
+
+console.log('Time query of temporary reducer')
+await timeIt(async () => await b.reduce(null, count))
