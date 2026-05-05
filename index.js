@@ -317,11 +317,11 @@ class Hyperbee extends EventEmitter {
     let i = 0
     // Skip keys outside of range
     if (start) {
-        while (i < v.keys.length) {
-          const data = v.keys.get(i)
-          if (b4a.compare(data.key, start) >= 0) break
-          i++
-        }
+      while (i < v.keys.length) {
+        const data = v.keys.get(i)
+        if (b4a.compare(data.key, start) >= 0) break
+        i++
+      }
     }
     // Process keys until end or last key reached
     while (i < v.keys.length) {
@@ -339,11 +339,11 @@ class Hyperbee extends EventEmitter {
         let first = 0
         // Skip children outside of range
         if (start) {
-            while (first < v.keys.length) {
-              const data = v.keys.get(first)
-              if (b4a.compare(data.key, start) > 0) break
-              first++
-            }
+          while (first < v.keys.length) {
+            const data = v.keys.get(first)
+            if (b4a.compare(data.key, start) > 0) break
+            first++
+          }
         }
         // Process children until end or last key reached
         let i = first
@@ -363,7 +363,7 @@ class Hyperbee extends EventEmitter {
         }
         // Process last child if not exited outer loop early
         subtrees.push(await this._reduceRange(v.children.get(i), name, reduce, start, end))
-      } while (false);
+      } while (false)
     }
 
     return reduce(subtrees, true)
@@ -378,9 +378,11 @@ class Hyperbee extends EventEmitter {
   // see if logic can be shared.
   async _reduce(ptr, name, reduce) {
     // Already calculated?
-    const existing = ptr.reducers?.[name]
-    if (existing !== null && existing !== undefined) {
-      return existing
+    if (name) {
+      const existing = ptr.reducers?.[name]
+      if (existing !== null && existing !== undefined) {
+        return existing
+      }
     }
 
     const v = ptr.value ? this.bump(ptr) : await this.inflate(ptr, this.config)
@@ -407,8 +409,10 @@ class Hyperbee extends EventEmitter {
     const result = rereduce.length > 1 ? reduce(rereduce, true) : rereduce[0]
 
     // Store result on tree node pointer
-    if (!ptr.reducers) ptr.reducers = {}
-    ptr.reducers[name] = result
+    if (name) {
+      if (!ptr.reducers) ptr.reducers = {}
+      ptr.reducers[name] = result
+    }
 
     // return result for this (sub)tree
     return result
