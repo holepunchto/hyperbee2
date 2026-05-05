@@ -211,6 +211,11 @@ class Hyperbee extends EventEmitter {
     return ptr.value
   }
 
+  async compat() {
+    await this.ready()
+    return this.context.getBlockType(0, this.config)
+  }
+
   async inflate(ptr, config) {
     if (!ptr.value) {
       await inflate(ptr, config)
