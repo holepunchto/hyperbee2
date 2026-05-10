@@ -44,15 +44,17 @@ const encoding1 = {
     if (m.core) c.uint.preencode(state, m.core)
     if (m.seq) c.uint.preencode(state, m.seq)
     if (m.offset) c.uint.preencode(state, m.offset)
+    if (m.reducers) c.json.preencode(state, m.reducers)
   },
   encode(state, m) {
-    const flags = (m.core ? 1 : 0) | (m.seq ? 2 : 0) | (m.offset ? 4 : 0)
+    const flags = (m.core ? 1 : 0) | (m.seq ? 2 : 0) | (m.offset ? 4 : 0) | (m.reducers ? 8 : 0)
 
     c.uint8.encode(state, flags)
 
     if (m.core) c.uint.encode(state, m.core)
     if (m.seq) c.uint.encode(state, m.seq)
     if (m.offset) c.uint.encode(state, m.offset)
+    if (m.reducers) c.json.encode(state, m.reducers)
   },
   decode(state) {
     const flags = c.uint8.decode(state)
@@ -60,7 +62,8 @@ const encoding1 = {
     return {
       core: (flags & 1) !== 0 ? c.uint.decode(state) : 0,
       seq: (flags & 2) !== 0 ? c.uint.decode(state) : 0,
-      offset: (flags & 4) !== 0 ? c.uint.decode(state) : 0
+      offset: (flags & 4) !== 0 ? c.uint.decode(state) : 0,
+      reducers: (flags & 8) !== 0 ? c.json.decode(state) : null
     }
   }
 }
@@ -71,11 +74,13 @@ const encoding1_inline = {
     if (m.core) c.uint.preencode(state, m.core)
     if (m.seq) c.uint.preencode(state, m.seq)
     if (m.offset) c.uint.preencode(state, m.offset)
+    if (m.reducers) c.json.preencode(state, m.reducers)
   },
   encode(state, m) {
     if (m.core) c.uint.encode(state, m.core)
     if (m.seq) c.uint.encode(state, m.seq)
     if (m.offset) c.uint.encode(state, m.offset)
+    if (m.reducers) c.json.encode(state, m.reducers)
   },
   decode(state, inlining) {
     const flags = inlining
@@ -83,7 +88,8 @@ const encoding1_inline = {
     return {
       core: (flags & 1) !== 0 ? c.uint.decode(state) : 0,
       seq: (flags & 2) !== 0 ? c.uint.decode(state) : 0,
-      offset: (flags & 4) !== 0 ? c.uint.decode(state) : 0
+      offset: (flags & 4) !== 0 ? c.uint.decode(state) : 0,
+      reducers: (flags & 8) !== 0 ? c.json.decode(state) : null
     }
   }
 }
@@ -91,7 +97,7 @@ const encoding1_inline = {
 // @bee/tree-delta
 const encoding2 = {
   preencode(state, m) {
-    state.end++ // flags are fixed size
+    state.end += 2 // flags are fixed size
 
     if (m.index) c.uint8.preencode(state, m.index)
     if (m.pointer) encoding1_inline.preencode(state, m.pointer)
@@ -99,16 +105,20 @@ const encoding2 = {
   encode(state, m) {
     let flags = (m.type & 7) | (m.index ? 8 : 0) | (m.pointer ? 16 : 0)
     if (m.pointer) {
-      flags |= (m.pointer.core ? 32 : 0) | (m.pointer.seq ? 64 : 0) | (m.pointer.offset ? 128 : 0)
+      flags |=
+        (m.pointer.core ? 32 : 0) |
+        (m.pointer.seq ? 64 : 0) |
+        (m.pointer.offset ? 128 : 0) |
+        (m.pointer.reducers ? 256 : 0)
     }
 
-    c.uint8.encode(state, flags)
+    c.uint16.encode(state, flags)
 
     if (m.index) c.uint8.encode(state, m.index)
     if (m.pointer) encoding1_inline.encode(state, m.pointer)
   },
   decode(state) {
-    const flags = c.uint8.decode(state)
+    const flags = c.uint16.decode(state)
 
     return {
       type: flags & 7,

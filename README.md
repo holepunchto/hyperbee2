@@ -380,6 +380,63 @@ Options:
 }
 ```
 
+#### `await db.reduce(name, reducer)`
+
+Calculates an accumulated value for all entries in the tree.
+
+To cache intermediate results between calls, provide a string as the
+`name` argument. This must be unique to the reducer function and be
+updated if the reducer changes in a backwards-incompatible way.
+
+To perform a one-off temporary reduce, provide `null` as the name.
+
+The `reducer` is a function that will calculate the accumulated value.
+It takes two arguments: `values` and `rereduce`.
+
+When `rereduce` is `false`, the `values` argument will be an Array of
+tree entries with `key` and `value` properties. When the `rereduce`
+argument is `true`, the `values` argument will be an Array of values
+returned from previous `reducer` calls.
+
+The output of a reducer must be a JSON-compatible value.
+
+Note: while entries provided to the reducer are in sorted key order,
+those entries might not be contiguous across reducer calls. For example,
+a reducer might receive `[3,4], [6,7], [9], [5,8]` across 4 calls.
+
+```js
+import Hyperbee from '../index.js'
+import Corestore from 'corestore'
+
+const total = (values, rereduce) => {
+  let total = 0
+  for (const v of values) {
+    if (rereduce) {
+      total += v
+    } else {
+      total += Number(v.value.toString())
+    }
+  }
+  return total
+}
+
+const b = new Hyperbee(new Corestore('./sandbox'))
+await b.ready()
+
+// Calculate total of all number strings
+console.log(await b.reduce('total', total))
+```
+
+#### `await db.reduceRange(name, reducer, start, end)`
+
+Calculates an accumulated value for a range of entries in the tree.
+`start` can be `null` (to begin with the first entry) or a `Buffer` less
+than or equal to the first key to include. `end` can be `null` (to end
+after the last entry), or a `Buffer` greater than the last key to include.
+
+The `name` and `reducer` arguments are described in the documentation for
+`db.reduce()`.
+
 #### `b.on('ready', listener)`
 
 Emitted once the Hyperbee is ready for use.
@@ -481,10 +538,16 @@ does not exist, this method does nothing (and will not throw).
 
 Queues an operation to clear all entries from the tree.
 
-#### `await batch.flush()`
+#### `await batch.flush([reducers])`
 
 Aquires an exclusive write lock and applies the operations queued in this
 batch to the tree, clearing the queue.
+
+The `reducers` argument is an Object with `reducer` functions (as described by
+the documentation for `db.reduce()`) keyed by unique strings. If provided,
+these will be recalculated for all nodes lacking a cached reduce result and
+updated values will be written to Hypercore as part of the batch. This greatly
+improves query time for reducers at the expense of writing a larger batch.
 
 **Warning:** continuing to use the batch after flushing can cause unpredictable
 behavior. Batches applied after the first flush will be 'unapplied' if you

@@ -308,6 +308,118 @@ class Hyperbee extends EventEmitter {
       ptr = v.children.get(i)
     }
   }
+
+  async reduceRange(name, reduce, start, end) {
+    return await this._reduceRange(this.root, name, reduce, start, end)
+  }
+
+  async _reduceRange(ptr, name, reduce, start, end) {
+    const v = ptr.value ? this.bump(ptr) : await this.inflate(ptr, this.config)
+
+    const values = []
+    const subtrees = []
+
+    let i = 0
+    // Skip keys outside of range
+    if (start) {
+      while (i < v.keys.length) {
+        const data = v.keys.get(i)
+        if (b4a.compare(data.key, start) >= 0) break
+        i++
+      }
+    }
+    // Process keys until end or last key reached
+    while (i < v.keys.length) {
+      const data = v.keys.get(i)
+      if (end && b4a.compare(data.key, end) >= 0) break
+      values.push(data)
+      i++
+    }
+    if (values.length) {
+      subtrees.push(reduce(values, false))
+    }
+
+    if (v.children.length) {
+      outer: do {
+        let first = 0
+        // Skip children outside of range
+        if (start) {
+          while (first < v.keys.length) {
+            const data = v.keys.get(first)
+            if (b4a.compare(data.key, start) > 0) break
+            first++
+          }
+        }
+        // Process children until end or last key reached
+        let i = first
+        while (i < v.keys.length) {
+          const data = v.keys.get(i)
+          const isLast = end && b4a.compare(data.key, end) >= 0
+          if (i === first || isLast) {
+            subtrees.push(await this._reduceRange(v.children.get(i), name, reduce, start, end))
+          } else {
+            subtrees.push(await this._reduce(v.children.get(i), name, reduce))
+          }
+          if (isLast) {
+            // This was the last child to process
+            break outer
+          }
+          i++
+        }
+        // Process last child if not exited outer loop early
+        subtrees.push(await this._reduceRange(v.children.get(i), name, reduce, start, end))
+      } while (false)
+    }
+
+    return reduce(subtrees, true)
+  }
+
+  async reduce(name, reduce) {
+    return await this._reduce(this.root, name, reduce)
+  }
+
+  // TODO: avoid recursion?
+  // TODO: this shares a lot of structure with _materializeReducer in write.js,
+  // see if logic can be shared.
+  async _reduce(ptr, name, reduce) {
+    // Already calculated?
+    if (name) {
+      const existing = ptr.reducers?.[name]
+      if (existing !== null && existing !== undefined) {
+        return existing
+      }
+    }
+
+    const v = ptr.value ? this.bump(ptr) : await this.inflate(ptr, this.config)
+
+    // Values stored at this node
+    const values = []
+    for (let i = 0, len = v.keys.length; i < len; i++) {
+      const data = v.keys.get(i)
+      values.push(data)
+    }
+
+    // Store results to combine later
+    const rereduce = [reduce(values, false)]
+
+    // Results for child nodes
+    for (let i = 0, len = v.children.length; i < len; i++) {
+      const c = v.children.get(i)
+      rereduce.push(await this._reduce(c, name, reduce))
+    }
+
+    // Re-reduce if necessary (because this is not a leaf node)
+    const result = rereduce.length > 1 ? reduce(rereduce, true) : rereduce[0]
+
+    // Store result on tree node pointer
+    if (name) {
+      if (!ptr.reducers) ptr.reducers = {}
+      ptr.reducers[name] = result
+    }
+
+    // return result for this (sub)tree
+    return result
+  }
 }
 
 module.exports = Hyperbee
