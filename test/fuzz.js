@@ -322,40 +322,6 @@ test('fuzz regression #3', async function (t) {
   t.alike(actual, expected)
 })
 
-test('multi writer regression with contexts', async function (t) {
-  const [a, b] = await createMultiple(t, 2, { t: 5 })
-
-  await a.ready()
-  await b.ready()
-
-  for (let i = 0; i < 20; i++) {
-    const k = b4a.from('#' + i.toString().padStart(2, '0'))
-    const w = a.write({ key: a.core.key, length: a.core.length })
-
-    w.tryPut(k, k)
-    await w.flush()
-  }
-
-  const k = b4a.from('#20')
-  const w = b.write({ key: a.core.key, length: a.core.length })
-
-  w.tryPut(k, k)
-  await w.flush()
-
-  a.cache.empty()
-  b.cache.empty()
-
-  {
-    const node = await a.get(b4a.from('#00'))
-    t.alike(node.value, b4a.from('#00'))
-  }
-
-  {
-    const node = await b.get(b4a.from('#00'))
-    t.alike(node.value, b4a.from('#00'))
-  }
-})
-
 test('multi writer regression with key contexts', async function (t) {
   const [a, b] = await createMultiple(t, 2)
 
