@@ -1,5 +1,7 @@
 const test = require('brittle')
 const b4a = require('b4a')
+const Corestore = require('corestore')
+const Bee = require('../')
 const { create, replicate } = require('./helpers')
 
 test('basic', async function (t) {
@@ -860,6 +862,47 @@ test('trace', async function (t) {
   }
 
   t.alike(seqs, new Set([0, 1]))
+})
+
+test('repeated put with empty buffer value after reload of storage', async function (t) {
+  const storage = await t.tmp()
+  const hello = b4a.from('hello')
+
+  {
+    const store = new Corestore(storage)
+    const db = new Bee(store)
+
+    {
+      const w = db.write()
+      await w.lock()
+
+      w.tryPut(hello, b4a.alloc(0))
+      await w.flush()
+    }
+    t.alike((await db.get(hello)).value, b4a.alloc(0), 'got empty buffer value')
+
+    await db.close()
+    await store.close()
+  }
+
+  {
+    const store = new Corestore(storage)
+    const db = new Bee(store)
+
+    // Previous behaviour was a crash
+    {
+      const w = db.write()
+      await w.lock()
+
+      w.tryPut(hello, b4a.alloc(0))
+      await w.flush()
+    }
+
+    t.alike((await db.get(hello)).value, b4a.alloc(0), 'got empty buffer value after reloading')
+
+    await db.close()
+    await store.close()
+  }
 })
 
 test('autoUpdate doesnt lose data', async function (t) {
