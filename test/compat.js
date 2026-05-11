@@ -161,7 +161,7 @@ test('basic block 0', async function (t) {
   await snap.close()
 })
 
-test('bigger block 0', async function (t) {
+test.solo('bigger block 0', async function (t) {
   const block0Batch = [
     b4a.from('000000000601010000000001022330022330', 'hex'),
     b4a.from('0000000007000001020000000001000001022331022331', 'hex'),

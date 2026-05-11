@@ -101,6 +101,7 @@ class Hyperbee extends EventEmitter {
     return new Hyperbee(this.store, {
       config: this.config,
       core: context.core,
+      activeRequests: [],
       context,
       root,
       view: true,
@@ -168,7 +169,7 @@ class Hyperbee extends EventEmitter {
 
   async close() {
     if (!this.root) await this.ready()
-    if (this.config.activeRequests.length) Hypercore.clearRequests(this.config.activeRequests)
+    Hypercore.destroyRequests(this.config.activeRequests, null)
     if (this.view) return
     if (this.store.closing) return this.store.close()
     await this.store.close()
@@ -208,6 +209,11 @@ class Hyperbee extends EventEmitter {
     this.context.cache.bump(ptr)
     this.context.cache.gc()
     return ptr.value
+  }
+
+  async compat() {
+    await this.ready()
+    return this.context.getBlockType(0, this.config)
   }
 
   async inflate(ptr, config) {

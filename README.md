@@ -356,7 +356,7 @@ The `range` argument accepts the same properties as the options for
 
 #### `await db.get(key, [options])`
 
-Attempt to find an entry by its key.
+Attempt to find an entry by its key. `key` is a buffer.
 
 Returns `null` if no entry exists in the range, or an object with
 the following properties on success:
@@ -470,12 +470,13 @@ you to keep a consistent view of the database while building the batch.
 #### `batch.tryPut(key, value)`
 
 Queues an operation to associate `key` with `value`. Any existing entry
-for `key` will be overwritten.
+for `key` will be overwritten. Both `key` and `value` are buffers.
 
 #### `batch.tryDelete(key)`
 
 Queues an operation to remove the entry with `key`, if it exists. If it
-does not exist, this method does nothing (and will not throw).
+does not exist, this method does nothing (and will not throw). `key` is a
+buffer.
 
 #### `batch.tryClear()`
 
