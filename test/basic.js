@@ -141,7 +141,7 @@ test('basic delete', async function (t) {
     const length = db.core.length
     const w = db.write()
     w.tryDelete(b4a.from('b'))
-    await w.flush({ debug: true })
+    await w.flush()
     t.ok(length < db.core.length)
   }
 
