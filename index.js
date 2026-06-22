@@ -134,7 +134,9 @@ class Hyperbee extends EventEmitter {
 
   write(opts = {}) {
     if (!this.writable) throw new Error('Not writable')
-    opts.key = opts.key || this.head().key
+    if (!opts.key) {
+      opts.key = this.root ? this.head().key : null
+    }
     return new WriteBatch(this, opts)
   }
 
