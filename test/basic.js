@@ -801,6 +801,39 @@ test('move to current head() does not emit update event', async function (t) {
   t.alike(counter, 1)
 })
 
+test('move - write w/ key after move defaults to head\'s key', async function (t) {
+  const db = await create(t)
+  await db.ready()
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('hello'), b4a.from('world'))
+    await w.flush()
+  }
+
+  let counter = 0
+  const db2 = await create(t)
+
+  replicate(t, db, db2)
+
+  await db2.ready()
+
+  // Both db and db2 head now have length=1 (but different keys).
+  const dbHead = db.head()
+  db2.move(dbHead)
+
+  t.alike((await db2.get(b4a.from('hello')))?.value, b4a.from('world'))
+
+  {
+    const w = db2.write()
+    t.alike(w.key, dbHead.key, 'new write is using db head')
+    w.tryPut(b4a.from('hello'), b4a.from('world!!!'))
+    await w.flush()
+  }
+
+  t.alike((await db2.get(b4a.from('hello')))?.value, b4a.from('world!!!'))
+})
+
 test('RangeIterator.prefetchNext with upper bound', async function (t) {
   const db = await create(t)
 
