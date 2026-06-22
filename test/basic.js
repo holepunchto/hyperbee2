@@ -801,7 +801,7 @@ test('move to current head() does not emit update event', async function (t) {
   t.alike(counter, 1)
 })
 
-test('move - write w/ key after move defaults to head\'s key', async function (t) {
+test("move - write w/ key after move defaults to head's key", async function (t) {
   const db = await create(t)
   await db.ready()
 
@@ -811,7 +811,6 @@ test('move - write w/ key after move defaults to head\'s key', async function (t
     await w.flush()
   }
 
-  let counter = 0
   const db2 = await create(t)
 
   replicate(t, db, db2)
