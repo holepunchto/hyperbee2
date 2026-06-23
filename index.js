@@ -132,8 +132,11 @@ class Hyperbee extends EventEmitter {
     return this._makeView(this.context, this.root, true, n)
   }
 
-  write(opts) {
+  write(opts = {}) {
     if (!this.writable) throw new Error('Not writable')
+    if (!opts.key) {
+      opts.key = this.root ? this.head().key : null
+    }
     return new WriteBatch(this, opts)
   }
 
