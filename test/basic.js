@@ -961,18 +961,30 @@ test('createReadStream localOnly', async function (t) {
     await w.flush()
   }
 
-  // event flush
   await new Promise((resolve) => setTimeout(resolve, 100))
 
-  await db2.core.download({ start: 1, end: 2 }).done()
-  await db2.core.download({ start: 3, end: 4 }).done()
-  await db2.core.download({ start: 4, end: 5 }).done()
+  await db2.download()
+
+  await db2.core.startMarking()
+  await db2.core.markBlock(1, 2)
+  await db2.core.markBlock(3, 4)
+  await db2.core.sweep()
+
+  // to block 3
+  db2.move({ length: 4 })
   db2.cache.empty()
+
+  t.not(await db2.core.has(0))
+  t.not(await db2.core.has(2))
+  t.not(await db2.core.has(4))
+  t.ok(await db2.core.has(1))
+  t.ok(await db2.core.has(3))
 
   const actual = []
   for await (const data of db2.createReadStream({ localOnly: true })) {
     actual.push(data.key)
   }
 
-  t.alike(actual, [b4a.from('1'), b4a.from('3'), b4a.from('4')])
+  // local view of the tree ( at block 3 height )
+  t.alike(actual, [b4a.from('0'), b4a.from('1'), b4a.from('2'), b4a.from('3')])
 })
