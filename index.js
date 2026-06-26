@@ -220,15 +220,16 @@ class Hyperbee extends EventEmitter {
   }
 
   async inflate(ptr, config) {
-    if (!ptr.value) {
-      await inflate(ptr, config)
-    }
+    const value = await inflate(ptr, config)
+    if (!value) return null
+
     this.bump(ptr)
     return ptr.value
   }
 
   async finalizeKeyPointer(key, config) {
     const value = key.value || (await inflateValue(key, config))
+    if (value === null && config.localOnly) return null
 
     return {
       core: key.context.getCore(key.core),
