@@ -229,7 +229,7 @@ class Hyperbee extends EventEmitter {
 
   async finalizeKeyPointer(key, config) {
     const value = key.value || (await inflateValue(key, config))
-    if (value === null && config.localOnly) return null
+    if (value === null && !config.wait) return null
 
     return {
       core: key.context.getCore(key.core),
@@ -289,6 +289,7 @@ class Hyperbee extends EventEmitter {
 
     while (true) {
       const v = ptr.value ? this.bump(ptr) : await this.inflate(ptr, config)
+      if (!v) return null
 
       let s = 0
       let e = v.keys.length
@@ -297,6 +298,12 @@ class Hyperbee extends EventEmitter {
       while (s < e) {
         const mid = (s + e) >> 1
         const m = v.keys.get(mid)
+
+        if (!m) {
+          if (s === mid) s = mid + 1
+          else e = mid
+          continue
+        }
 
         c = b4a.compare(key, m.key)
 
@@ -310,6 +317,7 @@ class Hyperbee extends EventEmitter {
 
       const i = c < 0 ? e : s
       ptr = v.children.get(i)
+      if (!ptr) return null
     }
   }
 }

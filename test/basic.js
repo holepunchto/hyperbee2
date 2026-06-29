@@ -565,9 +565,7 @@ test('basic seq, offset and core', async function (t) {
   t.not(b.seq, c.seq)
 })
 
-test('throws hypercore error if block not available', async function (t) {
-  t.plan(1)
-
+test('get returns null if block not available and wait is false', async function (t) {
   const db = await create(t)
   await db.ready()
 
@@ -582,12 +580,7 @@ test('throws hypercore error if block not available', async function (t) {
 
   await new Promise((resolve) => setTimeout(resolve, 100))
 
-  try {
-    await db2.get(b4a.from('b'), { wait: false })
-    t.fail('should have failed')
-  } catch (error) {
-    t.is(error.code, 'BLOCK_NOT_AVAILABLE')
-  }
+  t.alike(await db2.get(b4a.from('b'), { wait: false }), null)
 })
 
 test('lock to avoid building concurrent batches', async function (t) {
@@ -946,7 +939,7 @@ test('autoUpdate doesnt lose data', async function (t) {
   t.alike((await db.get(b4a.from('2'))).value, b4a.from('2'))
 })
 
-test('createReadStream localOnly', async function (t) {
+test('createReadStream wait false', async function (t) {
   const db = await create(t)
   await db.ready()
 
@@ -981,10 +974,9 @@ test('createReadStream localOnly', async function (t) {
   t.ok(await db2.core.has(3))
 
   const actual = []
-  for await (const data of db2.createReadStream({ localOnly: true })) {
+  for await (const data of db2.createReadStream({ wait: false })) {
     actual.push(data.key)
   }
 
-  // local view of the tree ( at block 3 height )
-  t.alike(actual, [b4a.from('0'), b4a.from('1'), b4a.from('2'), b4a.from('3')])
+  t.alike(actual, [b4a.from('1'), b4a.from('3')])
 })
