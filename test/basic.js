@@ -565,9 +565,7 @@ test('basic seq, offset and core', async function (t) {
   t.not(b.seq, c.seq)
 })
 
-test('throws hypercore error if block not available', async function (t) {
-  t.plan(1)
-
+test('get returns null if block not available and wait is false', async function (t) {
   const db = await create(t)
   await db.ready()
 
@@ -582,12 +580,7 @@ test('throws hypercore error if block not available', async function (t) {
 
   await new Promise((resolve) => setTimeout(resolve, 100))
 
-  try {
-    await db2.get(b4a.from('b'), { wait: false })
-    t.fail('should have failed')
-  } catch (error) {
-    t.is(error.code, 'BLOCK_NOT_AVAILABLE')
-  }
+  t.alike(await db2.get(b4a.from('b'), { wait: false }), null)
 })
 
 test('lock to avoid building concurrent batches', async function (t) {
@@ -633,10 +626,7 @@ test('emit update event after remote append to empty tree and autoUpdate = true'
     b4a.from('010000000c01011100010568656c6c6f0105776f726c64', 'hex')
   ])
 
-  const { promise, resolve } = Promise.withResolvers()
-  setTimeout(resolve, 0)
-
-  await promise
+  await new Promise((resolve) => setTimeout(resolve, 0))
   t.alike(counter, 1)
 })
 
@@ -657,10 +647,7 @@ test('emit update event after remote append to non-empty tree and autoUpdate = t
     b4a.from('010000000d000001021159010100010268690102686f', 'hex')
   ])
 
-  const { promise, resolve } = Promise.withResolvers()
-  setTimeout(resolve, 0)
-
-  await promise
+  await new Promise((resolve) => setTimeout(resolve, 0))
   t.alike(counter, 2)
 })
 
@@ -950,4 +937,46 @@ test('autoUpdate doesnt lose data', async function (t) {
 
   t.alike((await db.get(b4a.from('1'))).value, b4a.from('1'))
   t.alike((await db.get(b4a.from('2'))).value, b4a.from('2'))
+})
+
+test('createReadStream wait false', async function (t) {
+  const db = await create(t)
+  await db.ready()
+
+  const db2 = await create(t, { key: db.core.key, autoUpdate: true })
+  await db2.ready()
+
+  replicate(t, db, db2)
+
+  for (let i = 0; i < 5; i++) {
+    const w = db.write()
+    w.tryPut(b4a.from('' + i), b4a.from('' + i))
+    await w.flush()
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, 100))
+
+  await db2.download()
+
+  await db2.core.startMarking()
+  await db2.core.markBlock(1, 2)
+  await db2.core.markBlock(3, 4)
+  await db2.core.sweep()
+
+  // to block 3
+  db2.move({ length: 4 })
+  db2.cache.empty()
+
+  t.not(await db2.core.has(0))
+  t.not(await db2.core.has(2))
+  t.not(await db2.core.has(4))
+  t.ok(await db2.core.has(1))
+  t.ok(await db2.core.has(3))
+
+  const actual = []
+  for await (const data of db2.createReadStream({ wait: false })) {
+    actual.push(data.key)
+  }
+
+  t.alike(actual, [b4a.from('1'), b4a.from('3')])
 })
