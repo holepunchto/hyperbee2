@@ -571,19 +571,23 @@ test('throws hypercore error if block not available', async function (t) {
   const db = await create(t)
   await db.ready()
 
-  const db2 = await create(t, { key: db.core.key, autoUpdate: true })
+  const db2 = await create(t, { key: db.core.key, autoUpdate: false })
   await db2.ready()
 
-  replicate(t, db, db2)
+  const { s1, s2 } = replicate(t, db, db2)
 
   const w = db.write()
   w.tryPut(b4a.from('a'), b4a.alloc(32))
   await w.flush()
 
-  await new Promise((resolve) => setTimeout(resolve, 100))
+  // simulating inability to fetch the block
+  s1.destroy()
+  s2.destroy()
+  db2.move({ length: 1 })
+  db2.cache.empty()
 
   try {
-    await db2.get(b4a.from('b'), { wait: false })
+    await db2.get(b4a.from('a'), { wait: true, timeout: 500 })
     t.fail('should have failed')
   } catch (error) {
     t.is(error.code, 'BLOCK_NOT_AVAILABLE')

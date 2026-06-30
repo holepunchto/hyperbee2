@@ -5,7 +5,7 @@ exports.create = create
 exports.createMultiple = createMultiple
 exports.replicate = replicate
 
-async function replicate(t, a, b) {
+function replicate(t, a, b) {
   const s1 = a.replicate(true)
   const s2 = b.replicate(false)
 
@@ -23,6 +23,8 @@ async function replicate(t, a, b) {
     await closed1
     await closed2
   })
+
+  return { s1, s2 }
 }
 
 async function create(t, opts) {
