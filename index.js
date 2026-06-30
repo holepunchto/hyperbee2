@@ -220,8 +220,10 @@ class Hyperbee extends EventEmitter {
   }
 
   async inflate(ptr, config) {
-    const value = await inflate(ptr, config)
-    if (!value) return null
+    if (!ptr.value) {
+      const value = await inflate(ptr, config)
+      if (!value) return null
+    }
 
     this.bump(ptr)
     return ptr.value
