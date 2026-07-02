@@ -126,7 +126,9 @@ class Hyperbee extends EventEmitter {
 
   setDegree(t) {
     if (!Number.isInteger(t) || t < 2) throw new Error('t must be an integer >= 2')
-    if (this.context.lock.locked) throw new Error('Cannot change degree while a write is in progress')
+    if (this.context.lock.locked) {
+      throw new Error('Cannot change degree while a write is in progress')
+    }
 
     this.context.t = t
     this.context.minKeys = t - 1
