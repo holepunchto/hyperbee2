@@ -133,6 +133,15 @@ class Hyperbee extends EventEmitter {
     this.context.t = t
     this.context.minKeys = t - 1
     this.context.maxKeys = 2 * t - 1
+
+    // Update all cache contexts
+    for (const otherContext of this.context.other.values()) {
+      if (otherContext === this.context) continue
+
+      otherContext.t = t
+      otherContext.minKeys = t - 1
+      otherContext.maxKeys = 2 * t - 1
+    }
   }
 
   snapshot() {

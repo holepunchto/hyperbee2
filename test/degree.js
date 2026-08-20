@@ -66,6 +66,33 @@ test.skip("setDegree via a snapshot changes the live tree's degree stats for tha
   t.is(db.context.maxKeys, 3, 'new degree on snapshot recalculates maxKey on db')
 })
 
+test('setDegree propagates updates cached contexts so degree propagates', async function (t) {
+  const db = await create(t, { t: 4 })
+  await db.ready()
+
+  // A second stands in for another writer's context for the multi-core
+  // (getContextByKey) mechanism.
+  const other = db.store.get({ name: 'other-core' })
+  await other.ready()
+  t.teardown(() => other.close())
+
+  // checkout({ key }) routes to context.getContextByKey(key), to cache in
+  // context.other degree is copied from the live context
+  const before = db.checkout({ key: other.key })
+  t.is(before.context.t, 4, 'cached sub-context created with the pre-change degree')
+
+  db.setDegree(16)
+  t.is(db.context.t, 16, 'the primary/live context now reports the new degree')
+
+  // Checking out the SAME key again the cached sub-context
+  const after = db.checkout({ key: other.key })
+
+  t.is(after.context, before.context, 'checkout reused the cached sub-context object')
+  t.is(after.context.t, 16, 'degree reverts to the pre-setDegree() value on this cached context')
+  t.is(after.context.minKeys, 15)
+  t.is(after.context.maxKeys, 31)
+})
+
 test('setDegree, old and new degree nodes coexist correctly', async function (t) {
   const db = await create(t, { t: 2 })
   await db.ready()
