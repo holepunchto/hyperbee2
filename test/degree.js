@@ -44,6 +44,28 @@ test('setDegree throws while a write is in progress', async function (t) {
   t.is(db.context.t, 16)
 })
 
+// Skipping because its more of an example than a behaviour we want to enforce
+test.skip("setDegree via a snapshot changes the live tree's degree stats for that context", async function (t) {
+  const db = await create(t, { t: 8 }) // maxKeys = 15
+  await db.ready()
+
+  const total = 300
+  for (let i = 0; i < total; i++) {
+    const w = db.write()
+    w.tryPut(b4a.from('k' + String(i).padStart(4, '0')), b4a.from('v' + i))
+    await w.flush()
+  }
+
+  // Caller only holds a read-only snapshot, it cannot reorganize the nodes
+  // Not required but shows that no writes happen.
+  const snap = db.snapshot()
+  t.absent(snap.writable, 'snapshot is read-only')
+  t.is(snap.context, db.context, 'snapshot shares the live context object')
+
+  snap.setDegree(2)
+  t.is(db.context.maxKeys, 3, 'new degree on snapshot recalculates maxKey on db')
+})
+
 test('setDegree, old and new degree nodes coexist correctly', async function (t) {
   const db = await create(t, { t: 2 })
   await db.ready()
