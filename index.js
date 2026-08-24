@@ -122,9 +122,6 @@ class Hyperbee extends EventEmitter {
     this.context = key ? this.context.getContextByKey(key) : this.context
     this.writable = writable
 
-    const sameCore = key === null || b4a.equals(key, this.core.key)
-    if (!sameCore || length < this.core.length) this.context.cache.empty()
-
     this._setRoot(this._nodeAtSeq(length - 1), true)
   }
 
