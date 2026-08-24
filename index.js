@@ -182,6 +182,11 @@ class Hyperbee extends EventEmitter {
 
   async ready() {
     if (!this.core.opened) await this.core.ready()
+    // bump the internal ranges for less roundtrips since interactive
+    if (this.core.replicator.setInflightRange) {
+      this.core.replicator.setInflightRange(256, 512)
+    }
+
     if (this.root) return
     if (this.preload) await this.preload()
     if (this.root) return
