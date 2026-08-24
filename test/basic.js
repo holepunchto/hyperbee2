@@ -951,3 +951,22 @@ test('autoUpdate doesnt lose data', async function (t) {
   t.alike((await db.get(b4a.from('1'))).value, b4a.from('1'))
   t.alike((await db.get(b4a.from('2'))).value, b4a.from('2'))
 })
+
+test('lots of overwrites with odd batches', async function (t) {
+  const db = await create(t)
+
+  let j = 0
+  for (let i = 0; i < 1000; i++) {
+    const w = db.write()
+
+    j = (j + 1) % 80
+
+    w.tryPut(b4a.from('#a' + j), b4a.from('#' + i + '.' + j))
+    w.tryPut(b4a.from('#b' + j), b4a.from('#' + i + '.' + j))
+    w.tryPut(b4a.from('#c' + j), b4a.from('#' + i + '.' + j))
+
+    await w.flush()
+  }
+
+  t.ok(db.root.value.keys.delta.length < 20, 'sanity check')
+})
