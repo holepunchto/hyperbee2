@@ -26,7 +26,7 @@ class Hyperbee extends EventEmitter {
       timeout = config.timeout,
       wait = config.wait,
       trace = config.trace,
-      core = _getRootCore(key),
+      core = _getRootCore(store, key, getEncryptionProvider),
       context = new CoreContext(
         store,
         core,
