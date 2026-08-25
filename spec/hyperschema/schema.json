@@ -47,6 +47,12 @@
           "name": "offset",
           "type": "uint",
           "version": 1
+        },
+        {
+          "name": "reducers",
+          "required": false,
+          "type": "json",
+          "version": 1
         }
       ]
     },
