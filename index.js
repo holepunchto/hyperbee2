@@ -26,9 +26,7 @@ class Hyperbee extends EventEmitter {
       timeout = config.timeout,
       wait = config.wait,
       trace = config.trace,
-      core = key
-        ? store.get({ key, encryption: getEncryptionProvider(key) })
-        : store.get({ key, name: 'bee', encryption: getEncryptionProvider(key) }),
+      core = _getRootCore(store, key, getEncryptionProvider),
       context = new CoreContext(
         store,
         core,
@@ -179,6 +177,7 @@ class Hyperbee extends EventEmitter {
 
   async ready() {
     if (!this.core.opened) await this.core.ready()
+
     if (this.root) return
     if (this.preload) await this.preload()
     if (this.root) return
@@ -341,4 +340,12 @@ function noop() {}
 function toEncryptionProvider(encryption) {
   if (encryption) return (key) => encryption
   return () => null
+}
+
+function _getRootCore(store, key, getEncryptionProvider) {
+  const encryption = getEncryptionProvider(key)
+
+  return key
+    ? store.get({ key, encryption, inflightRange: [256, 512] })
+    : store.get({ key, name: 'bee', encryption, inflightRange: [256, 512] })
 }

@@ -4,6 +4,8 @@ const Corestore = require('corestore')
 const Bee = require('../')
 const { create, replicate } = require('./helpers')
 
+const INFLIGHT_RANGE = [256, 512]
+
 test('basic', async function (t) {
   const db = await create(t)
   const w = db.write()
@@ -969,4 +971,58 @@ test('lots of overwrites with odd batches', async function (t) {
   }
 
   t.ok(db.root.value.keys.delta.length < 20, 'sanity check')
+})
+
+test('inflight range - default root core (no key given)', async function (t) {
+  const db = await create(t)
+  await db.ready()
+
+  t.alike(db.core.replicator.inflightRange, INFLIGHT_RANGE)
+})
+
+test('inflight range - secondary core opened via context.getCore()', async function (t) {
+  const db1 = await create(t)
+  {
+    const w = db1.write()
+    w.tryPut(b4a.from('a'), b4a.from('1'))
+    await w.flush()
+  }
+
+  const db2 = await create(t)
+  replicate(t, db1, db2)
+
+  {
+    const w = db2.write(db1.head())
+    w.tryPut(b4a.from('b'), b4a.from('2'))
+    await w.flush()
+  }
+
+  // 'a' lives on db1's core, so resolving it forces db2's local context
+  // to open db1's core as a secondary core (context.cores[0]) via getCore()
+  const value = await db2.get(b4a.from('a'))
+  t.alike(value.value, b4a.from('1'))
+
+  const hc = db2.context.getCore(1)
+  t.alike(hc.replicator.inflightRange, INFLIGHT_RANGE)
+})
+
+test('inflight range - secondary core opened via context.getContextByKey()', async function (t) {
+  const db1 = await create(t)
+  {
+    const w = db1.write()
+    w.tryPut(b4a.from('a'), b4a.from('1'))
+    await w.flush()
+  }
+
+  const db2 = await create(t)
+  replicate(t, db1, db2)
+
+  // writing on top of a foreign head resolves that key's context via
+  // getContextByKey() during flush()
+  const w = db2.write(db1.head())
+  w.tryPut(b4a.from('b'), b4a.from('2'))
+  await w.flush()
+
+  const ctx = db2.context.getContextByKey(db1.core.key)
+  t.alike(ctx.core.replicator.inflightRange, INFLIGHT_RANGE)
 })
