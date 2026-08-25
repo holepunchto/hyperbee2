@@ -65,6 +65,8 @@ Options include:
 }
 ```
 
+If you pass your own `core`, consider increasing the inflight range on it (`256` minimum recommended, e.g. `{ inflightRange: [256, 512] }` when creating the core via Corestore) to match `hyperbee2` constructed cores.
+
 #### `await db.ready()`
 
 Ensures the underlying [Hypercore][hypercore] is ready and prepares the Hyperbee
