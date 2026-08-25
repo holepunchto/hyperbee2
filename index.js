@@ -26,7 +26,7 @@ class Hyperbee extends EventEmitter {
       timeout = config.timeout,
       wait = config.wait,
       trace = config.trace,
-      core = _getRootCore(store, key, getEncryptionProvider),
+      core = getRootCore(store, key, getEncryptionProvider),
       context = new CoreContext(
         store,
         core,
@@ -342,7 +342,7 @@ function toEncryptionProvider(encryption) {
   return () => null
 }
 
-function _getRootCore(store, key, getEncryptionProvider) {
+function getRootCore(store, key, getEncryptionProvider) {
   const encryption = getEncryptionProvider(key)
 
   return key
