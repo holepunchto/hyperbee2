@@ -1,6 +1,6 @@
 const Hyperschema = require('hyperschema')
 
-const schema = Hyperschema.from('./spec/hyperschema', { versioned: false })
+const schema = Hyperschema.from('./spec/hyperschema')
 const bee = schema.namespace('bee')
 
 bee.register({
@@ -276,6 +276,10 @@ bee.register({
       type: '@bee/core',
       array: true,
       required: true
+    },
+    {
+      name: 'degree',
+      type: 'uint'
     }
   ]
 })

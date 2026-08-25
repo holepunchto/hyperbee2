@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "schema": [
     {
       "name": "tree-pointer-0",
@@ -319,7 +319,7 @@
       "name": "metadata",
       "namespace": "bee",
       "compact": false,
-      "flagsPosition": -1,
+      "flagsPosition": 1,
       "fields": [
         {
           "name": "cores",
@@ -327,6 +327,11 @@
           "array": true,
           "type": "@bee/core",
           "version": 1
+        },
+        {
+          "name": "degree",
+          "type": "uint",
+          "version": 2
         }
       ]
     },
