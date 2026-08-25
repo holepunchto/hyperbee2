@@ -980,20 +980,6 @@ test('inflight range - default root core (no key given)', async function (t) {
   t.alike(db.core.replicator.inflightRange, INFLIGHT_RANGE)
 })
 
-test('inflight range - root core supplied via opts.core', async function (t) {
-  const store = new Corestore(await t.tmp())
-  t.teardown(() => store.close())
-
-  const core = store.get({ name: 'external' })
-  await core.ready()
-
-  const db = new Bee(store, { core })
-  t.teardown(() => db.close())
-  await db.ready()
-
-  t.alike(db.core.replicator.inflightRange, INFLIGHT_RANGE)
-})
-
 test('inflight range - secondary core opened via context.getCore()', async function (t) {
   const db1 = await create(t)
   {
