@@ -4,7 +4,13 @@ const c = require('compact-encoding')
 const Corestore = require('corestore')
 const Bee = require('../')
 const { create, createMultiple } = require('./helpers')
-const { decodeBlock, encodeBlock, peekBlockType, TYPE_COMPAT, TYPE_LATEST } = require('../lib/encoding.js')
+const {
+  decodeBlock,
+  encodeBlock,
+  peekBlockType,
+  TYPE_COMPAT,
+  TYPE_LATEST
+} = require('../lib/encoding.js')
 const { getEncoding } = require('../spec/hyperschema')
 
 const DEGREE_COMPAT = 5
@@ -58,7 +64,11 @@ test('opening compat block sets tree to historical t=5 degree', async function (
   const reader = new Bee(store)
   await reader.ready()
 
-  t.is(reader.context.t, DEGREE_DEFAULT, 'constructed with the library default before touching any data')
+  t.is(
+    reader.context.t,
+    DEGREE_DEFAULT,
+    'constructed with the library default before touching any data'
+  )
 
   const node = await reader.get(b4a.from('k000'))
   t.alike(node.value, b4a.from('v0'), 'legacy data is still readable')
@@ -126,7 +136,11 @@ test('persist an auto-detected compat degree', async function (t) {
   const third = new Bee(store)
   await third.ready()
 
-  t.is(third.context.t, DEGREE_DEFAULT, 'constructed with the library default before touching any data')
+  t.is(
+    third.context.t,
+    DEGREE_DEFAULT,
+    'constructed with the library default before touching any data'
+  )
 
   const node = await third.get(b4a.from('k999'))
   t.alike(node.value, b4a.from('v999'), 'the migrator write is readable')
@@ -318,7 +332,11 @@ test('braiding cores w/ different degrees keeps their respective degrees', async
     if (block.metadata && block.metadata.degree) countMetadataWDegree++
   }
 
-  t.is(countMetadataWDegree, 2, 'two checkpoints carrying the degree should have been written to core b')
+  t.is(
+    countMetadataWDegree,
+    2,
+    'two checkpoints carrying the degree should have been written to core b'
+  )
   t.is(a.context.t, 7, 'a still has t = 7')
   t.is(b.context.t, 128, 'updated to 128')
 })
