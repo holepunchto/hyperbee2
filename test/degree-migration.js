@@ -1,9 +1,11 @@
 const test = require('brittle')
 const b4a = require('b4a')
+const c = require('compact-encoding')
 const Corestore = require('corestore')
 const Bee = require('../')
 const { create, createMultiple } = require('./helpers')
 const { decodeBlock, peekBlockType, TYPE_COMPAT, TYPE_LATEST } = require('../lib/encoding.js')
+const { getEncoding } = require('../spec/hyperschema')
 
 const DEGREE_COMPAT = 5
 const DEGREE_DEFAULT = 128
@@ -285,4 +287,20 @@ test('degree persists across peers once a multi-core checkpoint has been written
   }
 
   t.ok(sawMetadataWithDegree, 'a checkpoint carrying the degree should have been written to core a')
+})
+
+test('metadata without optional degree decodes as degree=0', function (t) {
+  const metadataEncoding = getEncoding('@bee/metadata')
+
+  // hand encode the old wire format, just the cores array mirrors what the
+  // previous schema produced.
+  const coreEncoding = getEncoding('@bee/core')
+
+  // encode the array of cores directly
+  const buf = c.encode(c.array(coreEncoding), [])
+
+  const decoded = c.decode(metadataEncoding, buf)
+
+  t.alike(decoded.cores, [])
+  t.is(decoded.degree, 0, 'missing flags byte should decode as no persisted degree')
 })
