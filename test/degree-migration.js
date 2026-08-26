@@ -2,7 +2,7 @@ const test = require('brittle')
 const b4a = require('b4a')
 const Corestore = require('corestore')
 const Bee = require('../')
-const { create } = require('./helpers')
+const { create, createMultiple } = require('./helpers')
 const { decodeBlock, peekBlockType, TYPE_COMPAT, TYPE_LATEST } = require('../lib/encoding.js')
 
 const DEGREE_COMPAT = 5
