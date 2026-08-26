@@ -131,17 +131,13 @@ class Hyperbee extends EventEmitter {
       throw new Error('Cannot change degree while a write is in progress')
     }
 
-    this.context.t = t
-    this.context.minKeys = t - 1
-    this.context.maxKeys = 2 * t - 1
+    this.context._setDegree(t)
 
     // Update all cache contexts
     for (const otherContext of this.context.other.values()) {
       if (otherContext === this.context) continue
 
-      otherContext.t = t
-      otherContext.minKeys = t - 1
-      otherContext.maxKeys = 2 * t - 1
+      otherContext._setDegree(t)
     }
   }
 
