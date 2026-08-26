@@ -4,7 +4,7 @@ const c = require('compact-encoding')
 const Corestore = require('corestore')
 const Bee = require('../')
 const { create, createMultiple } = require('./helpers')
-const { decodeBlock, peekBlockType, TYPE_COMPAT, TYPE_LATEST } = require('../lib/encoding.js')
+const { decodeBlock, encodeBlock, peekBlockType, TYPE_COMPAT, TYPE_LATEST } = require('../lib/encoding.js')
 const { getEncoding } = require('../spec/hyperschema')
 
 const DEGREE_COMPAT = 5
@@ -303,4 +303,23 @@ test('metadata without optional degree decodes as degree=0', function (t) {
 
   t.alike(decoded.cores, [])
   t.is(decoded.degree, 0, 'missing flags byte should decode as no persisted degree')
+})
+
+test('metadata with degree round trips (en/de)codeBlock', function (t) {
+  const block = {
+    type: TYPE_LATEST,
+    checkpoint: 0,
+    batch: { start: 0, end: 0 },
+    previous: null,
+    metadata: { cores: [], degree: 42 },
+    tree: [],
+    keys: [],
+    values: [],
+    cohorts: []
+  }
+
+  const buffer = encodeBlock(block)
+  const decoded = decodeBlock(buffer, 0)
+
+  t.is(decoded.metadata.degree, 42)
 })
