@@ -264,8 +264,8 @@ test('degree persists across peers once a multi-core checkpoint has been written
   await a.ready()
   await b.ready()
 
-  // alternate writers targeting each other's core so a genuine cross-core
-  // reference gets recorded, which is what flips context.changed = true
+  // alternate writers targeting each other's core so a cross-core
+  // reference gets recorded, which flips context.changed = true
   for (let i = 0; i < 30; i++) {
     const k = b4a.from('k' + i)
     if (i % 2 === 0) {
@@ -287,6 +287,40 @@ test('degree persists across peers once a multi-core checkpoint has been written
   }
 
   t.ok(sawMetadataWithDegree, 'a checkpoint carrying the degree should have been written to core a')
+})
+
+test('braiding cores w/ different degrees keeps their respective degrees', async function (t) {
+  const [a, b] = await createMultiple(t, 2, { t: 7 })
+  await a.ready()
+  await b.ready()
+
+  b.setDegree(128) // Makes B different
+
+  // alternate writers targeting each other's core so a cross-core
+  // reference gets recorded, which flips context.changed = true
+  for (let i = 0; i < 30; i++) {
+    const k = b4a.from('k' + i)
+    if (i % 2 === 0) {
+      const w = b.write({ key: a.core.key, length: a.core.length })
+      w.tryPut(k, k)
+      await w.flush()
+    } else {
+      const w = a.write({ key: b.core.key, length: b.core.length })
+      w.tryPut(k, k)
+      await w.flush()
+    }
+  }
+
+  let countMetadataWDegree = 0
+  for (let seq = 0; seq < b.core.length; seq++) {
+    const buffer = await b.core.get(seq)
+    const block = decodeBlock(buffer, seq)
+    if (block.metadata && block.metadata.degree) countMetadataWDegree++
+  }
+
+  t.is(countMetadataWDegree, 2, 'two checkpoints carrying the degree should have been written to core b')
+  t.is(a.context.t, 7, 'a still has t = 7')
+  t.is(b.context.t, 128, 'updated to 128')
 })
 
 test('metadata without optional degree decodes as degree=0', function (t) {
