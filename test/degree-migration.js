@@ -287,7 +287,11 @@ test('reading a compat block sets t = 5 but updates the next write', async funct
   await w.flush()
 
   t.is(reader.context.t, PERSISTED_DEGREE, 'write loads the real persisted degree')
-  t.is(reader.context.persistedDegree, PERSISTED_DEGREE, 'now persistedDegree set via the checkpoint')
+  t.is(
+    reader.context.persistedDegree,
+    PERSISTED_DEGREE,
+    'now persistedDegree set via the checkpoint'
+  )
 
   await reader.close()
 })
