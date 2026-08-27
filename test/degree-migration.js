@@ -4,11 +4,7 @@ const c = require('compact-encoding')
 const Corestore = require('corestore')
 const Bee = require('../')
 const { create, createMultiple } = require('./helpers')
-const {
-  decodeBlock,
-  encodeBlock,
-  TYPE_LATEST
-} = require('../lib/encoding.js')
+const { decodeBlock, encodeBlock, TYPE_LATEST } = require('../lib/encoding.js')
 const { getEncoding } = require('../spec/hyperschema')
 
 const DEGREE_COMPAT = 5
