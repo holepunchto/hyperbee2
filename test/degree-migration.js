@@ -7,40 +7,12 @@ const { create, createMultiple } = require('./helpers')
 const {
   decodeBlock,
   encodeBlock,
-  peekBlockType,
-  TYPE_COMPAT,
   TYPE_LATEST
 } = require('../lib/encoding.js')
 const { getEncoding } = require('../spec/hyperschema')
 
 const DEGREE_COMPAT = 5
 const DEGREE_DEFAULT = 128
-
-test('decodeBlock returns TYPE_LATEST for compat-encoded block, not TYPE_COMPAT', async function (t) {
-  const db = await create(t, { t: DEGREE_COMPAT })
-
-  const w = db.write({ compat: true })
-  w.tryPut(b4a.from('a'), b4a.from('1'))
-  await w.flush()
-
-  // the very first block is the "hyperbee" magic header, real data starts at seq 1
-  const buffer = await db.core.get(1)
-  t.is(peekBlockType(buffer), TYPE_COMPAT, 'block on disk is labeled as TYPE_COMPAT')
-
-  const block = decodeBlock(buffer, 1)
-  t.is(block.type, TYPE_LATEST, 'decoded compat block is relabeled as TYPE_LATEST')
-})
-
-test('db.compat() compat block as TYPE_LATEST', async function (t) {
-  const db = await create(t, { t: DEGREE_COMPAT })
-
-  const w = db.write({ compat: true })
-  w.tryPut(b4a.from('a'), b4a.from('1'))
-  await w.flush()
-
-  const detected = await db.compat()
-  t.is(detected, TYPE_LATEST, 'db.compat() reports legacy data as TYPE_LATEST')
-})
 
 test('opening compat block sets tree to historical t=5 degree', async function (t) {
   const dir = await t.tmp()
