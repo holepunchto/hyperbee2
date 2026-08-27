@@ -268,7 +268,7 @@ test('reading a compat block sets t = 5 but updates the next write', async funct
   const reader = new Bee(store)
   await reader.ready()
 
-  t.is(reader.context.persistedDegree, null, 'never synced with a checkpoint yet')
+  t.is(reader.context.persistedDegree, 0, 'never synced with a checkpoint yet')
 
   const node = await reader.get(b4a.from('k005'))
   t.alike(node.value, b4a.from('v5'), 'old compat node value is readable')
@@ -276,7 +276,7 @@ test('reading a compat block sets t = 5 but updates the next write', async funct
   t.is(reader.context.t, DEGREE_COMPAT, 'compat block read sets t=5 in memory')
   t.is(
     reader.context.persistedDegree,
-    null,
+    0,
     'reading doesnt set persistedDegree, so this stays "unconfirmed"'
   )
 
@@ -384,7 +384,7 @@ test('once the persisted degree matches, further writes do not re-emit metadata'
     return count
   }
 
-  // first write on a new tree: t (4) doesn't match persistedDegree (null)
+  // first write on a new tree: t (4) doesn't match persistedDegree (0)
   // yet, so it should persists it
   {
     const w = db.write()
