@@ -50,6 +50,49 @@ test('opening compat block sets tree to historical t=5 degree', async function (
   await reader.close()
 })
 
+test('opening a compat core will update degree before writing', async function (t) {
+  const dir = await t.tmp()
+
+  {
+    const store = new Corestore(dir)
+    const writer = new Bee(store, { t: DEGREE_COMPAT })
+    await writer.ready()
+
+    for (let i = 0; i < 40; i++) {
+      const w = writer.write({ compat: true })
+      w.tryPut(b4a.from('k' + String(i).padStart(3, '0')), b4a.from('v' + i))
+      await w.flush()
+    }
+
+    await writer.close()
+  }
+
+  // Reopening this core without knowing blocks are compat
+  const store = new Corestore(dir)
+  const reopendWriter = new Bee(store)
+  await reopendWriter.ready()
+
+  t.is(
+    reopendWriter.context.t,
+    DEGREE_DEFAULT,
+    'constructed with the library default before touching any data'
+  )
+
+  {
+    const w = reopendWriter.write()
+    w.tryPut(b4a.from('foo'), b4a.from('bar'))
+    await w.flush()
+  }
+
+  t.is(
+    reopendWriter.context.t,
+    DEGREE_COMPAT,
+    'auto-adapted context.t back to the historical degree on write'
+  )
+
+  await reopendWriter.close()
+})
+
 test('persist an auto-detected compat degree', async function (t) {
   const dir = await t.tmp()
 
