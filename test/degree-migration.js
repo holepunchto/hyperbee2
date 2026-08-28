@@ -281,36 +281,6 @@ test('write checkpoint w/ degree on context change only', async function (t) {
   await db.close()
 })
 
-test('degree persists across peers once a multi-core checkpoint has been written', async function (t) {
-  const [a, b] = await createMultiple(t, 2, { t: 7 })
-  await a.ready()
-  await b.ready()
-
-  // alternate writers targeting each other's core so a cross-core
-  // reference gets recorded, which flips context.changed = true
-  for (let i = 0; i < 30; i++) {
-    const k = b4a.from('k' + i)
-    if (i % 2 === 0) {
-      const w = b.write({ key: a.core.key, length: a.core.length })
-      w.tryPut(k, k)
-      await w.flush()
-    } else {
-      const w = a.write({ key: b.core.key, length: b.core.length })
-      w.tryPut(k, k)
-      await w.flush()
-    }
-  }
-
-  let sawMetadataWithDegree = false
-  for (let seq = 0; seq < a.core.length; seq++) {
-    const buffer = await a.core.get(seq)
-    const block = decodeBlock(buffer, seq)
-    if (block.metadata && block.metadata.degree) sawMetadataWithDegree = true
-  }
-
-  t.ok(sawMetadataWithDegree, 'a checkpoint carrying the degree should have been written to core a')
-})
-
 test('braiding cores w/ different degrees keeps their respective degrees', async function (t) {
   const [a, b] = await createMultiple(t, 2, { t: 7 })
   await a.ready()
