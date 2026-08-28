@@ -235,13 +235,10 @@ test('custom t degree persists across reopen (single core)', async function (t) 
   await db.close()
 })
 
-test('once the persisted degree matches, further writes do not re-emit metadata', async function (t) {
-  const dir = await t.tmp()
-  const store = new Corestore(dir)
-  const db = new Bee(store, { t: 4 })
-  await db.ready()
+test('write checkpoint w/ degree on context change only', async function (t) {
+  const db = await create(t, { t: 4 })
 
-  const countMetadataWithDegree = async () => {
+  const countMetadataWithDegree = async (db) => {
     let count = 0
     for (let seq = 0; seq < db.core.length; seq++) {
       const buffer = await db.core.get(seq)
@@ -251,15 +248,21 @@ test('once the persisted degree matches, further writes do not re-emit metadata'
     return count
   }
 
-  // first write on a new tree: t (4) doesn't match persistedDegree (0)
-  // yet, so it should persists it
   {
     const w = db.write()
-    w.tryPut(b4a.from('a'), b4a.from('1'))
+    w.tryPut(b4a.from('hello'), b4a.from('world'))
     await w.flush()
   }
 
-  t.is(await countMetadataWithDegree(), 1, 'first write persists the degree once')
+  const db2 = await create(t, { t: 4 })
+  replicate(t, db, db2)
+  {
+    const w = db2.write(db.head())
+    w.tryPut(b4a.from('hello'), b4a.from('people'))
+    await w.flush()
+  }
+
+  t.is(await countMetadataWithDegree(db2), 1, 'first write persists the degree once')
 
   // several more writes on the same, now-consistent context - none of these
   // should re-emit a metadata block just because a write happened
@@ -270,7 +273,7 @@ test('once the persisted degree matches, further writes do not re-emit metadata'
   }
 
   t.is(
-    await countMetadataWithDegree(),
+    await countMetadataWithDegree(db2),
     1,
     'subsequent writes on a consistent context should not re-emit metadata'
   )
