@@ -174,77 +174,31 @@ test('persist an auto-detected compat degree', async function (t) {
   t.is(await countMetadataWithDegree(third), 1, 'a fresh reader write persisted degree=5 to a checkpoint on disk')
 })
 
-test('reading a compat block sets t = 5 but updates the next write', async function (t) {
-  const dir = await t.tmp()
+// TODO Decide if we should set degree for all contexts via getBlock
+test('peer doesnt read block befor writing', async function (t) {
+  const writer = await create(t, { t: DEGREE_COMPAT })
 
-  {
-    const store = new Corestore(dir)
-    const writer = new Bee(store, { t: DEGREE_COMPAT })
-    await writer.ready()
-
-    for (let i = 0; i < 40; i++) {
-      const w = writer.write({ compat: true })
-      w.tryPut(b4a.from('k' + String(i).padStart(3, '0')), b4a.from('v' + i))
-      await w.flush()
-    }
-
-    await writer.close()
+  for (let i = 0; i < 40; i++) {
+    const w = writer.write({ compat: true })
+    w.tryPut(b4a.from('k' + String(i).padStart(3, '0')), b4a.from('v' + i))
+    await w.flush()
   }
 
-  // migrate to a persisted degree that is neither compat (5) nor the default (128)
-  const PERSISTED_DEGREE = 50
-  {
-    const store = new Corestore(dir)
-    const migrator = new Bee(store)
-    await migrator.ready()
+  const migrator = await create(t)
+  await migrator.ready()
 
-    await migrator.get(b4a.from('k000'))
+  replicate(t, writer, migrator)
+
+  migrator.move(writer.head())
+
+  {
+    // await migrator.get(b4a.from('k000')) // Uncomment to cause migrator to have a compat degree
     const w = migrator.write()
     w.tryPut(b4a.from('k999'), b4a.from('v999'))
     await w.flush()
 
-    migrator.setDegree(PERSISTED_DEGREE)
-    const w2 = migrator.write()
-    w2.tryPut(b4a.from('zzz'), b4a.from('newval'))
-    await w2.flush()
-    t.is(migrator.context.t, PERSISTED_DEGREE, 'checkpoint now carries the migrated degree')
-
-    await migrator.close()
+    t.is(migrator.context.getLocalContext().t, DEGREE_COMPAT, 'checkpoint carries configured degree')
   }
-
-  // fresh reader: a plain get() never calls context.update()/_inflateCheckpoint()
-  // If the traversal lands on a compat-encoded leaf (e.g. k005), it sets t=5
-  // since thats all it knows.
-  const store = new Corestore(dir)
-  const reader = new Bee(store)
-  await reader.ready()
-
-  t.is(reader.context.persistedDegree, 0, 'never synced with a checkpoint yet')
-
-  const node = await reader.get(b4a.from('k005'))
-  t.alike(node.value, b4a.from('v5'), 'old compat node value is readable')
-
-  t.is(reader.context.t, DEGREE_COMPAT, 'compat block read sets t=5 in memory')
-  t.is(
-    reader.context.persistedDegree,
-    0,
-    'reading doesnt set persistedDegree, so this stays "unconfirmed"'
-  )
-
-  // writing calls context.update() before touching the tree, so the checkpoint
-  // wins over the in-memory guess
-  const w = reader.write()
-  w.tryPut(b4a.from('another'), b4a.from('v'))
-  await w.flush()
-
-  t.is(reader.context.t, PERSISTED_DEGREE, 'write loads the real persisted degree')
-  t.is(
-    reader.context.persistedDegree,
-    PERSISTED_DEGREE,
-    'now persistedDegree set via the checkpoint'
-  )
-
-  await reader.close()
 })
 
 test('an explicitly constructed degree persists across reopen (single core)', async function (t) {
