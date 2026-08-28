@@ -3,7 +3,7 @@ const b4a = require('b4a')
 const c = require('compact-encoding')
 const Corestore = require('corestore')
 const Bee = require('../')
-const { createMultiple } = require('./helpers')
+const { create, createMultiple, replicate } = require('./helpers')
 const { decodeBlock, encodeBlock, TYPE_LATEST } = require('../lib/encoding.js')
 const { getEncoding } = require('../spec/hyperschema')
 
@@ -94,31 +94,38 @@ test('opening a compat core will update degree before writing', async function (
 })
 
 test('persist an auto-detected compat degree', async function (t) {
-  const dir = await t.tmp()
+  const writer = await create(t, { t: DEGREE_COMPAT })
 
-  {
-    const store = new Corestore(dir)
-    const writer = new Bee(store, { t: DEGREE_COMPAT })
-    await writer.ready()
-
-    for (let i = 0; i < 40; i++) {
-      const w = writer.write({ compat: true })
-      w.tryPut(b4a.from('k' + String(i).padStart(3, '0')), b4a.from('v' + i))
-      await w.flush()
+  const countMetadataWithDegree = async (db) => {
+    let count = 0
+    const localCore = await db.context.getLocalContext().core
+    for (let i = 0; i < localCore.length; i++) {
+      const buffer = await localCore.get(i)
+      const block = decodeBlock(buffer, i)
+      if (block.metadata && block.metadata.degree === DEGREE_COMPAT) {
+        count++
+      }
     }
+    return count
+  }
 
-    await writer.close()
+  for (let i = 0; i < 40; i++) {
+    const w = writer.write({ compat: true })
+    w.tryPut(b4a.from('k' + String(i).padStart(3, '0')), b4a.from('v' + i))
+    await w.flush()
   }
 
   // second reader: default t, reads compat data setting t = 5, then writes
   // degree into a checkpoint.
-  let coreLengthBeforeMigration
-  {
-    const store = new Corestore(dir)
-    const migrator = new Bee(store)
-    await migrator.ready()
+  const migrator = await create(t)
+  await migrator.ready()
 
-    coreLengthBeforeMigration = migrator.core.length
+  replicate(t, writer, migrator)
+
+  {
+    const head = writer.head()
+    console.log('head', head)
+    migrator.move(head)
 
     await migrator.get(b4a.from('k000'))
     t.is(migrator.context.t, DEGREE_COMPAT, 'auto-adapted in memory')
@@ -128,24 +135,15 @@ test('persist an auto-detected compat degree', async function (t) {
     await w.flush()
     t.is(migrator.context.t, DEGREE_COMPAT, 'still set after write')
 
-    // Prove the migration write actually persisted degree=5 to disk (aka wrote
-    // after prev length)
-    let sawMetadataWithDegree = false
-    for (let seq = coreLengthBeforeMigration; seq < migrator.core.length; seq++) {
-      const buffer = await migrator.core.get(seq)
-      const block = decodeBlock(buffer, seq)
-      if (block.metadata && block.metadata.degree === DEGREE_COMPAT) sawMetadataWithDegree = true
-    }
-    t.ok(sawMetadataWithDegree, 'the migration write persisted degree=5 to a checkpoint on disk')
-
-    await migrator.close()
+    t.is(await countMetadataWithDegree(migrator), 1, 'the migration write persisted degree=5 to a checkpoint on disk')
   }
 
   // third reader: default t, never derives the degree from compat data
   // it comes from the checkpoint the migrator wrote above.
-  const store = new Corestore(dir)
-  const third = new Bee(store)
+  const third = await create(t)
   await third.ready()
+
+  replicate(t, migrator, third)
 
   t.is(
     third.context.t,
@@ -153,8 +151,16 @@ test('persist an auto-detected compat degree', async function (t) {
     'constructed with the library default before touching any data'
   )
 
+  third.move(migrator.head())
+
   const node = await third.get(b4a.from('k999'))
   t.alike(node.value, b4a.from('v999'), 'the migrator write is readable')
+
+  t.is(
+    third.context.t,
+    DEGREE_COMPAT,
+    'a fresh reader should get the correct degree from the persisted checkpoint'
+  )
 
   const w = third.write()
   w.tryPut(b4a.from('k998'), b4a.from('v998'))
@@ -165,8 +171,7 @@ test('persist an auto-detected compat degree', async function (t) {
     DEGREE_COMPAT,
     'a fresh reader should get the correct degree from the persisted checkpoint'
   )
-
-  await third.close()
+  t.is(await countMetadataWithDegree(third), 1, 'a fresh reader write persisted degree=5 to a checkpoint on disk')
 })
 
 test('setDegree() after migration is not reverted by re-reading old compat blocks', async function (t) {
