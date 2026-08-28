@@ -125,22 +125,6 @@ class Hyperbee extends EventEmitter {
     this._setRoot(this._nodeAtSeq(length - 1), true)
   }
 
-  setDegree(t) {
-    if (!Number.isInteger(t) || t < 2) throw new Error('t must be an integer >= 2')
-    if (this.context.lock.locked) {
-      throw new Error('Cannot change degree while a write is in progress')
-    }
-
-    this.context._setDegree(t)
-
-    // Update all cache contexts
-    for (const otherContext of this.context.other.values()) {
-      if (otherContext === this.context) continue
-
-      otherContext._setDegree(t)
-    }
-  }
-
   snapshot() {
     return this._makeView(this.context, this.root, false, 0)
   }
