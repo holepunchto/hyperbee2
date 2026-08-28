@@ -201,7 +201,7 @@ test('peer doesnt read block befor writing', async function (t) {
   }
 })
 
-test('an explicitly constructed degree persists across reopen (single core)', async function (t) {
+test('custom t degree persists across reopen (single core)', async function (t) {
   const dir = await t.tmp()
 
   {
@@ -215,8 +215,9 @@ test('an explicitly constructed degree persists across reopen (single core)', as
       await w.flush()
     }
 
-    t.is(db.context.t, 4)
+    t.is(db.context.t, 4, 'context is correct')
     await db.close()
+    await store.close()
   }
 
   // Reopened with no explicit `t`, the persisted degree should win over the
