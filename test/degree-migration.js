@@ -3,7 +3,7 @@ const b4a = require('b4a')
 const c = require('compact-encoding')
 const Corestore = require('corestore')
 const Bee = require('../')
-const { create, createMultiple, replicate } = require('./helpers')
+const { create, replicate } = require('./helpers')
 const { decodeBlock, encodeBlock, TYPE_LATEST } = require('../lib/encoding.js')
 const { getEncoding } = require('../spec/hyperschema')
 
@@ -135,7 +135,11 @@ test('persist an auto-detected compat degree', async function (t) {
     await w.flush()
     t.is(migrator.context.t, DEGREE_COMPAT, 'still set after write')
 
-    t.is(await countMetadataWithDegree(migrator), 1, 'the migration write persisted degree=5 to a checkpoint on disk')
+    t.is(
+      await countMetadataWithDegree(migrator),
+      1,
+      'the migration write persisted degree=5 to a checkpoint on disk'
+    )
   }
 
   // third reader: default t, never derives the degree from compat data
@@ -171,7 +175,11 @@ test('persist an auto-detected compat degree', async function (t) {
     DEGREE_COMPAT,
     'a fresh reader should get the correct degree from the persisted checkpoint'
   )
-  t.is(await countMetadataWithDegree(third), 1, 'a fresh reader write persisted degree=5 to a checkpoint on disk')
+  t.is(
+    await countMetadataWithDegree(third),
+    1,
+    'a fresh reader write persisted degree=5 to a checkpoint on disk'
+  )
 })
 
 // TODO Decide if we should set degree for all contexts via getBlock
@@ -197,7 +205,11 @@ test('peer doesnt read block befor writing', async function (t) {
     w.tryPut(b4a.from('k999'), b4a.from('v999'))
     await w.flush()
 
-    t.is(migrator.context.getLocalContext().t, DEGREE_COMPAT, 'checkpoint carries configured degree')
+    t.is(
+      migrator.context.getLocalContext().t,
+      DEGREE_COMPAT,
+      'checkpoint carries configured degree'
+    )
   }
 })
 
