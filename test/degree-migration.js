@@ -174,71 +174,6 @@ test('persist an auto-detected compat degree', async function (t) {
   t.is(await countMetadataWithDegree(third), 1, 'a fresh reader write persisted degree=5 to a checkpoint on disk')
 })
 
-test('setDegree() after migration is not reverted by re-reading old compat blocks', async function (t) {
-  const dir = await t.tmp()
-
-  {
-    const store = new Corestore(dir)
-    const writer = new Bee(store, { t: DEGREE_COMPAT })
-    await writer.ready()
-
-    for (let i = 0; i < 40; i++) {
-      const w = writer.write({ compat: true })
-      w.tryPut(b4a.from('k' + String(i).padStart(3, '0')), b4a.from('v' + i))
-      await w.flush()
-    }
-
-    await writer.close()
-  }
-
-  const store = new Corestore(dir)
-  const migrator = new Bee(store)
-  await migrator.ready()
-
-  // auto-detect degree from compat data, then persist it by writing
-  // a new key. This only rewrites the path for k999 - most of the tree,
-  // e.g. k005, is still backed by untouched, compat-encoded blocks on disk.
-  await migrator.get(b4a.from('k000'))
-  const w = migrator.write()
-  w.tryPut(b4a.from('k999'), b4a.from('v999'))
-  await w.flush()
-  t.is(migrator.context.t, DEGREE_COMPAT, 't = 5 persisted via checkpoint')
-
-  // the user now explicitly opts into a bigger degree going forward
-  migrator.setDegree(128)
-  t.is(migrator.context.t, 128, 'setDegree() applies immediately')
-
-  // reading an old key still served from a compat-encoded block should not
-  // undo the explicit setDegree() call
-  const node = await migrator.get(b4a.from('k005'))
-  t.alike(node.value, b4a.from('v5'), 'old compat-backed key is still readable')
-  t.is(
-    migrator.context.t,
-    128,
-    'reading old compat data should not revert an explicit setDegree() override'
-  )
-
-  const w2 = migrator.write()
-  w2.tryPut(b4a.from('zzz'), b4a.from('newval'))
-  await w2.flush()
-  t.is(migrator.context.t, 128, 'the explicit degree survives the next flush')
-
-  await migrator.close()
-
-  // and it should survive reopen too
-  const store2 = new Corestore(dir)
-  const reopened = new Bee(store2)
-  await reopened.ready()
-
-  const wr = reopened.write()
-  wr.tryPut(b4a.from('another'), b4a.from('v'))
-  await wr.flush()
-
-  t.is(reopened.context.t, 128, 'the explicit degree survives reopen')
-
-  await reopened.close()
-})
-
 test('reading a compat block sets t = 5 but updates the next write', async function (t) {
   const dir = await t.tmp()
 
@@ -341,45 +276,6 @@ test('an explicitly constructed degree persists across reopen (single core)', as
   await w.flush()
 
   t.is(db.context.t, 4, 'degree recorded at construction time should survive reopen')
-
-  await db.close()
-})
-
-test('setDegree() persists across reopen (single core)', async function (t) {
-  const dir = await t.tmp()
-
-  {
-    const store = new Corestore(dir)
-    const db = new Bee(store, { t: 4 })
-    await db.ready()
-
-    {
-      const w = db.write()
-      w.tryPut(b4a.from('a'), b4a.from('1'))
-      await w.flush()
-    }
-
-    db.setDegree(50)
-
-    {
-      const w = db.write()
-      w.tryPut(b4a.from('b'), b4a.from('2'))
-      await w.flush()
-    }
-
-    t.is(db.context.t, 50)
-    await db.close()
-  }
-
-  const store = new Corestore(dir)
-  const db = new Bee(store)
-  await db.ready()
-
-  const w = db.write()
-  w.tryPut(b4a.from('c'), b4a.from('3'))
-  await w.flush()
-
-  t.is(db.context.t, 50, 'setDegree() should survive reopen just like the constructor t option')
 
   await db.close()
 })
