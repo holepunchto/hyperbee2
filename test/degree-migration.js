@@ -349,6 +349,13 @@ test('checkout doesnt change live degree', async function (t) {
     'can get value from checkout'
   )
   t.is(migrator.context.getLocalContext().t, DEGREE_COMPAT, 'non-checkout context doesnt change')
+
+  {
+    const w = migrator.write()
+    w.tryPut(b4a.from('k998'), b4a.from('v998'))
+    await w.flush()
+    t.is(migrator.context.getLocalContext().t, 128, 'writes now with degree from head')
+  }
 })
 
 test('write checkpoint w/ degree on context change only', async function (t) {
