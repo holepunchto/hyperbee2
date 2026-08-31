@@ -16,7 +16,7 @@ class Hyperbee extends EventEmitter {
     super()
 
     const {
-      t = 128, // legacy number for now, should be 128 now
+      t = 128,
       key = null,
       encryption = null,
       getEncryptionProvider = toEncryptionProvider(encryption),
@@ -121,26 +121,6 @@ class Hyperbee extends EventEmitter {
     this.writable = writable
 
     this._setRoot(this._nodeAtSeq(length - 1), true)
-  }
-
-  setDegree(t) {
-    if (!Number.isInteger(t) || t < 2) throw new Error('t must be an integer >= 2')
-    if (this.context.lock.locked) {
-      throw new Error('Cannot change degree while a write is in progress')
-    }
-
-    this.context.t = t
-    this.context.minKeys = t - 1
-    this.context.maxKeys = 2 * t - 1
-
-    // Update all cache contexts
-    for (const otherContext of this.context.other.values()) {
-      if (otherContext === this.context) continue
-
-      otherContext.t = t
-      otherContext.minKeys = t - 1
-      otherContext.maxKeys = 2 * t - 1
-    }
   }
 
   snapshot() {
