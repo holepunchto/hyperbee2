@@ -128,12 +128,12 @@ test('persist an auto-detected compat degree', async function (t) {
     migrator.move(head)
 
     await migrator.get(b4a.from('k000'))
-    t.is(migrator.context.t, DEGREE_COMPAT, 'auto-adapted in memory')
+    t.is(migrator.context.getLocalContext().t, DEGREE_COMPAT, 'auto-adapted in memory')
 
     const w = migrator.write()
     w.tryPut(b4a.from('k999'), b4a.from('v999'))
     await w.flush()
-    t.is(migrator.context.t, DEGREE_COMPAT, 'still set after write')
+    t.is(migrator.context.getLocalContext().t, DEGREE_COMPAT, 'still set after write')
 
     t.is(
       await countMetadataWithDegree(migrator),
