@@ -238,11 +238,7 @@ test('peer doesnt read block before writing', async function (t) {
     // tree is compat, it will always hit one.
     await w.flush()
 
-    t.is(
-      migrator.context.getLocalContext().t,
-      DEGREE_COMPAT,
-      'context carries configured degree'
-    )
+    t.is(migrator.context.getLocalContext().t, DEGREE_COMPAT, 'context carries configured degree')
     t.is(
       await countMetadataWithDegree(migrator, DEGREE_COMPAT),
       1,
@@ -305,11 +301,7 @@ test('checkout doesnt change live degree', async function (t) {
     await w.flush()
   }
 
-  t.is(
-    await countMetadataWithDegree(other, 128),
-    1,
-    'checkpoint written by other w/ degree'
-  )
+  t.is(await countMetadataWithDegree(other, 128), 1, 'checkpoint written by other w/ degree')
 
   // second peer: compat t, writes with t = 5 (no checkpoint), then moves to
   // 1st peer head loads the degree from their tree and writes degree into a
@@ -351,7 +343,11 @@ test('checkout doesnt change live degree', async function (t) {
 
   const checkout = migrator.checkout(oldHead)
 
-  t.alike((await checkout.get(b4a.from('k999'))).value, b4a.from('v999'), 'can get value from checkout')
+  t.alike(
+    (await checkout.get(b4a.from('k999'))).value,
+    b4a.from('v999'),
+    'can get value from checkout'
+  )
   t.is(migrator.context.getLocalContext().t, DEGREE_COMPAT, 'non-checkout context doesnt change')
 })
 
@@ -426,7 +422,7 @@ test('metadata with degree round trips (en/de)codeBlock', function (t) {
   t.is(decoded.metadata.degree, 42)
 })
 
-async function countMetadataWithDegree (db, degree) {
+async function countMetadataWithDegree(db, degree) {
   let count = 0
   const localCore = await db.context.getLocalContext().core
   for (let i = 0; i < localCore.length; i++) {
