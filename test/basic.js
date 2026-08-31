@@ -2,6 +2,7 @@ const test = require('brittle')
 const b4a = require('b4a')
 const Corestore = require('corestore')
 const Bee = require('../')
+const { TYPE_LATEST, TYPE_COMPAT } = require('../lib/encoding.js')
 const { create, replicate } = require('./helpers')
 
 const INFLIGHT_RANGE = [256, 512]
@@ -971,6 +972,32 @@ test('lots of overwrites with odd batches', async function (t) {
   }
 
   t.ok(db.root.value.keys.delta.length < 20, 'sanity check')
+})
+
+test('db.compat()', async function (t) {
+  const db = await create(t, { t: 5 })
+
+  t.is(await db.compat(), TYPE_LATEST, 'returns TYPE_LATEST w/o blocks (aka default)')
+
+  {
+    const w = db.write({ compat: true })
+    w.tryPut(b4a.from('beep'), b4a.from('boop'))
+    await w.flush()
+  }
+
+  t.is(await db.compat(), TYPE_COMPAT, 'returns TYPE_COMPAT w/ compat block')
+
+  const db2 = await create(t)
+
+  t.is(await db2.compat(), TYPE_LATEST, 't = 128 returns TYPE_LATEST w/o blocks (aka default)')
+
+  {
+    const w = db2.write()
+    w.tryPut(b4a.from('beep'), b4a.from('boop'))
+    await w.flush()
+  }
+
+  t.is(await db2.compat(), TYPE_LATEST, 't = 128 returns TYPE_COMPAT w/ block')
 })
 
 test('inflight range - default root core (no key given)', async function (t) {
