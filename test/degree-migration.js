@@ -182,6 +182,65 @@ test('persist an auto-detected compat degree', async function (t) {
   )
 })
 
+test('take degree from tree that you move to', async function (t) {
+  const writer = await create(t, { t: DEGREE_COMPAT })
+
+  const countMetadataWithDegree = async (db) => {
+    let count = 0
+    const localCore = await db.context.getLocalContext().core
+    for (let i = 0; i < localCore.length; i++) {
+      const buffer = await localCore.get(i)
+      const block = decodeBlock(buffer, i)
+      if (block.metadata && block.metadata.degree === DEGREE_COMPAT) {
+        count++
+      }
+    }
+    return count
+  }
+
+  for (let i = 0; i < 40; i++) {
+    const w = writer.write({ compat: true })
+    w.tryPut(b4a.from('k' + String(i).padStart(3, '0')), b4a.from('v' + i))
+    await w.flush()
+  }
+
+  // second peer: default t, writes with t = 128 (no checkpoint), then moves to
+  // 1st peer head loads the degree from their tree and writes degree into a
+  // checkpoint.
+  const migrator = await create(t)
+  await migrator.ready()
+
+  replicate(t, writer, migrator)
+
+  {
+    const w = migrator.write()
+    w.tryPut(b4a.from('k999'), b4a.from('v999'))
+    await w.flush()
+  }
+  t.is(migrator.context.getLocalContext().t, 128, 'starts with default degree')
+
+  const head = writer.head()
+  migrator.move(head)
+
+  await migrator.get(b4a.from('k000'))
+  t.is(migrator.context.getLocalContext().t, DEGREE_COMPAT, 'auto-adapted in memory')
+
+  t.is(await migrator.get(b4a.from('k999')), null, 'no longer have local writes after move')
+
+  {
+    const w = migrator.write()
+    w.tryPut(b4a.from('k999'), b4a.from('v999'))
+    await w.flush()
+    t.is(migrator.context.getLocalContext().t, DEGREE_COMPAT, 'writes now with degree from head')
+  }
+
+  t.is(
+    await countMetadataWithDegree(migrator),
+    1,
+    'the migration write persisted degree=128 to a checkpoint on disk'
+  )
+})
+
 // TODO Decide if we should set degree for all contexts via getBlock
 test('peer doesnt read block befor writing', async function (t) {
   const writer = await create(t, { t: DEGREE_COMPAT })
