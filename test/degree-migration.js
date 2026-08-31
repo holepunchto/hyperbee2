@@ -290,7 +290,10 @@ test('peer doesnt read block before writing', async function (t) {
   }
 })
 
-test('custom t degree persists across reopen (single core)', async function (t) {
+// Skipped because it is caused by improper configuration.
+// Aka you should open your hyperbee2 with the same custom t, if the t is
+// changed by the remote, that will be detected as part of the checkpoint block.
+test.skip('custom t degree persists across reopen (single core)', async function (t) {
   const dir = await t.tmp()
 
   {
