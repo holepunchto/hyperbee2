@@ -16,7 +16,7 @@ class Hyperbee extends EventEmitter {
     super()
 
     const {
-      t = 128, // legacy number for now, should be 128 now
+      t = 128,
       key = null,
       encryption = null,
       getEncryptionProvider = toEncryptionProvider(encryption),
