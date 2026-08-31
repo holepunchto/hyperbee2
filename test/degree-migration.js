@@ -362,11 +362,9 @@ test('metadata with degree round trips (en/de)codeBlock', function (t) {
 async function countMetadataWithDegree (db, degree) {
   let count = 0
   const localCore = await db.context.getLocalContext().core
-  console.log('countMetadataWithDegree')
   for (let i = 0; i < localCore.length; i++) {
     const buffer = await localCore.get(i)
     const block = decodeBlock(buffer, i)
-    console.log('block.metadata.degree', block.metadata?.degree)
     if (block.metadata && block.metadata.degree === degree) {
       count++
     }
