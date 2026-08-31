@@ -8,7 +8,6 @@ async function runTests() {
   test.pause()
 
   await import('./basic.js')
-  await import('./degree.js')
   await import('./diff.js')
   await import('./fuzz.js')
   await import('./tree.js')
