@@ -3,7 +3,7 @@ const b4a = require('b4a')
 const c = require('compact-encoding')
 const Corestore = require('corestore')
 const Bee = require('../')
-const { create, replicate } = require('./helpers')
+const { create, createMultiple, replicate } = require('./helpers')
 const { decodeBlock, encodeBlock, TYPE_LATEST } = require('../lib/encoding.js')
 const { getEncoding } = require('../spec/hyperschema')
 
@@ -286,6 +286,73 @@ test.skip('custom t degree persists across reopen (single core)', async function
   t.is(db.context.t, 4, 'degree recorded at construction time should survive reopen')
 
   await db.close()
+})
+
+test('checkout doesnt change live degree', async function (t) {
+  const [writer, other] = await createMultiple(t, 2)
+
+  for (let i = 0; i < 40; i++) {
+    const w = writer.write()
+    w.tryPut(b4a.from('k' + String(i).padStart(3, '0')), b4a.from('v' + i))
+    await w.flush()
+  }
+
+  other.move(writer.head())
+
+  {
+    const w = other.write()
+    w.tryPut(b4a.from('other0'), b4a.from('v0'))
+    await w.flush()
+  }
+
+  t.is(
+    await countMetadataWithDegree(other, 128),
+    1,
+    'checkpoint written by other w/ degree'
+  )
+
+  // second peer: compat t, writes with t = 5 (no checkpoint), then moves to
+  // 1st peer head loads the degree from their tree and writes degree into a
+  // checkpoint.
+  const migrator = await create(t, { t: DEGREE_COMPAT })
+  await migrator.ready()
+
+  replicate(t, other, migrator)
+
+  {
+    const w = migrator.write()
+    w.tryPut(b4a.from('k999'), b4a.from('v999'))
+    await w.flush()
+  }
+  t.is(migrator.context.getLocalContext().t, DEGREE_COMPAT, 'starts with compat degree')
+
+  const oldHead = migrator.head()
+
+  const head = other.head()
+  migrator.move(head)
+
+  await migrator.get(b4a.from('k000'))
+  t.is(migrator.context.getLocalContext().t, 128, 'auto-adapted in memory')
+
+  t.is(await migrator.get(b4a.from('k999')), null, 'no longer have local writes after move')
+
+  {
+    const w = migrator.write()
+    w.tryPut(b4a.from('k999'), b4a.from('v999'))
+    await w.flush()
+    t.is(migrator.context.getLocalContext().t, 128, 'writes now with degree from head')
+  }
+
+  t.is(
+    await countMetadataWithDegree(migrator, 128),
+    1,
+    'the migration write persisted degree=128 to a checkpoint on disk'
+  )
+
+  const checkout = migrator.checkout(oldHead)
+
+  t.alike((await checkout.get(b4a.from('k999'))).value, b4a.from('v999'), 'can get value from checkout')
+  t.is(migrator.context.getLocalContext().t, DEGREE_COMPAT, 'non-checkout context doesnt change')
 })
 
 test('write checkpoint w/ degree on context change only', async function (t) {
