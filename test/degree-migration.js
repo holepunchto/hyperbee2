@@ -241,9 +241,21 @@ test('take degree from tree that you move to', async function (t) {
   )
 })
 
-// TODO Decide if we should set degree for all contexts via getBlock
-test('peer doesnt read block befor writing', async function (t) {
+test('peer doesnt read block before writing', async function (t) {
   const writer = await create(t, { t: DEGREE_COMPAT })
+
+  const countMetadataWithDegree = async (db) => {
+    let count = 0
+    const localCore = await db.context.getLocalContext().core
+    for (let i = 0; i < localCore.length; i++) {
+      const buffer = await localCore.get(i)
+      const block = decodeBlock(buffer, i)
+      if (block.metadata && block.metadata.degree === DEGREE_COMPAT) {
+        count++
+      }
+    }
+    return count
+  }
 
   for (let i = 0; i < 40; i++) {
     const w = writer.write({ compat: true })
@@ -259,15 +271,21 @@ test('peer doesnt read block befor writing', async function (t) {
   migrator.move(writer.head())
 
   {
-    // await migrator.get(b4a.from('k000')) // Uncomment to cause migrator to have a compat degree
     const w = migrator.write()
     w.tryPut(b4a.from('k999'), b4a.from('v999'))
+    // Should read a compat block when inflating tree to write, since entire
+    // tree is compat, it will always hit one.
     await w.flush()
 
     t.is(
       migrator.context.getLocalContext().t,
       DEGREE_COMPAT,
-      'checkpoint carries configured degree'
+      'context carries configured degree'
+    )
+    t.is(
+      await countMetadataWithDegree(migrator),
+      1,
+      'checkpoint block carries configured degree'
     )
   }
 })
