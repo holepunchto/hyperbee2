@@ -312,7 +312,7 @@ test('checkout doesnt change live degree', async function (t) {
   replicate(t, other, migrator)
 
   {
-    const w = migrator.write()
+    const w = migrator.write({ compat: true })
     w.tryPut(b4a.from('k999'), b4a.from('v999'))
     await w.flush()
   }
@@ -348,6 +348,7 @@ test('checkout doesnt change live degree', async function (t) {
     b4a.from('v999'),
     'can get value from checkout'
   )
+
   t.is(migrator.context.getLocalContext().t, DEGREE_COMPAT, 'non-checkout context doesnt change')
 
   {
@@ -434,6 +435,9 @@ async function countMetadataWithDegree(db, degree) {
   const localCore = await db.context.getLocalContext().core
   for (let i = 0; i < localCore.length; i++) {
     const buffer = await localCore.get(i)
+    // Skip legacy header
+    if (b4a.equals(buffer, b4a.from('0a086879706572626565', 'hex'))) continue
+
     const block = decodeBlock(buffer, i)
     if (block.metadata && block.metadata.degree === degree) {
       count++
