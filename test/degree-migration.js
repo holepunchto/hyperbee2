@@ -96,19 +96,6 @@ test('opening a compat core will update degree before writing', async function (
 test('persist an auto-detected compat degree', async function (t) {
   const writer = await create(t, { t: DEGREE_COMPAT })
 
-  const countMetadataWithDegree = async (db) => {
-    let count = 0
-    const localCore = await db.context.getLocalContext().core
-    for (let i = 0; i < localCore.length; i++) {
-      const buffer = await localCore.get(i)
-      const block = decodeBlock(buffer, i)
-      if (block.metadata && block.metadata.degree === DEGREE_COMPAT) {
-        count++
-      }
-    }
-    return count
-  }
-
   for (let i = 0; i < 40; i++) {
     const w = writer.write({ compat: true })
     w.tryPut(b4a.from('k' + String(i).padStart(3, '0')), b4a.from('v' + i))
@@ -136,7 +123,7 @@ test('persist an auto-detected compat degree', async function (t) {
     t.is(migrator.context.getLocalContext().t, DEGREE_COMPAT, 'still set after write')
 
     t.is(
-      await countMetadataWithDegree(migrator),
+      await countMetadataWithDegree(migrator, DEGREE_COMPAT),
       1,
       'the migration write persisted degree=5 to a checkpoint on disk'
     )
@@ -176,7 +163,7 @@ test('persist an auto-detected compat degree', async function (t) {
     'a fresh reader should get the correct degree from the persisted checkpoint'
   )
   t.is(
-    await countMetadataWithDegree(third),
+    await countMetadataWithDegree(third, DEGREE_COMPAT),
     1,
     'a fresh reader write persisted degree=5 to a checkpoint on disk'
   )
@@ -184,19 +171,6 @@ test('persist an auto-detected compat degree', async function (t) {
 
 test('take degree from tree that you move to', async function (t) {
   const writer = await create(t, { t: DEGREE_COMPAT })
-
-  const countMetadataWithDegree = async (db) => {
-    let count = 0
-    const localCore = await db.context.getLocalContext().core
-    for (let i = 0; i < localCore.length; i++) {
-      const buffer = await localCore.get(i)
-      const block = decodeBlock(buffer, i)
-      if (block.metadata && block.metadata.degree === DEGREE_COMPAT) {
-        count++
-      }
-    }
-    return count
-  }
 
   for (let i = 0; i < 40; i++) {
     const w = writer.write({ compat: true })
@@ -235,7 +209,7 @@ test('take degree from tree that you move to', async function (t) {
   }
 
   t.is(
-    await countMetadataWithDegree(migrator),
+    await countMetadataWithDegree(migrator, DEGREE_COMPAT),
     1,
     'the migration write persisted degree=128 to a checkpoint on disk'
   )
@@ -243,19 +217,6 @@ test('take degree from tree that you move to', async function (t) {
 
 test('peer doesnt read block before writing', async function (t) {
   const writer = await create(t, { t: DEGREE_COMPAT })
-
-  const countMetadataWithDegree = async (db) => {
-    let count = 0
-    const localCore = await db.context.getLocalContext().core
-    for (let i = 0; i < localCore.length; i++) {
-      const buffer = await localCore.get(i)
-      const block = decodeBlock(buffer, i)
-      if (block.metadata && block.metadata.degree === DEGREE_COMPAT) {
-        count++
-      }
-    }
-    return count
-  }
 
   for (let i = 0; i < 40; i++) {
     const w = writer.write({ compat: true })
@@ -283,7 +244,7 @@ test('peer doesnt read block before writing', async function (t) {
       'context carries configured degree'
     )
     t.is(
-      await countMetadataWithDegree(migrator),
+      await countMetadataWithDegree(migrator, DEGREE_COMPAT),
       1,
       'checkpoint block carries configured degree'
     )
@@ -330,16 +291,6 @@ test.skip('custom t degree persists across reopen (single core)', async function
 test('write checkpoint w/ degree on context change only', async function (t) {
   const db = await create(t, { t: 4 })
 
-  const countMetadataWithDegree = async (db) => {
-    let count = 0
-    for (let seq = 0; seq < db.core.length; seq++) {
-      const buffer = await db.core.get(seq)
-      const block = decodeBlock(buffer, seq)
-      if (block.metadata && block.metadata.degree) count++
-    }
-    return count
-  }
-
   {
     const w = db.write()
     w.tryPut(b4a.from('hello'), b4a.from('world'))
@@ -354,7 +305,7 @@ test('write checkpoint w/ degree on context change only', async function (t) {
     await w.flush()
   }
 
-  t.is(await countMetadataWithDegree(db2), 1, 'first write persists the degree once')
+  t.is(await countMetadataWithDegree(db2, 4), 1, 'first write persists the degree once')
 
   // several more writes on the same, now-consistent context - none of these
   // should re-emit a metadata block just because a write happened
@@ -365,7 +316,7 @@ test('write checkpoint w/ degree on context change only', async function (t) {
   }
 
   t.is(
-    await countMetadataWithDegree(db2),
+    await countMetadataWithDegree(db2, 4),
     1,
     'subsequent writes on a consistent context should not re-emit metadata'
   )
@@ -407,3 +358,18 @@ test('metadata with degree round trips (en/de)codeBlock', function (t) {
 
   t.is(decoded.metadata.degree, 42)
 })
+
+async function countMetadataWithDegree (db, degree) {
+  let count = 0
+  const localCore = await db.context.getLocalContext().core
+  console.log('countMetadataWithDegree')
+  for (let i = 0; i < localCore.length; i++) {
+    const buffer = await localCore.get(i)
+    const block = decodeBlock(buffer, i)
+    console.log('block.metadata.degree', block.metadata?.degree)
+    if (block.metadata && block.metadata.degree === degree) {
+      count++
+    }
+  }
+  return count
+}
