@@ -325,6 +325,10 @@ bee.register({
       name: 'cohorts',
       type: '@bee/cohort',
       array: true
+    },
+    {
+      name: 't',
+      type: 'uint'
     }
   ]
 })

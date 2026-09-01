@@ -387,6 +387,11 @@
           "array": true,
           "type": "@bee/cohort",
           "version": 1
+        },
+        {
+          "name": "t",
+          "type": "uint",
+          "version": 1
         }
       ]
     }

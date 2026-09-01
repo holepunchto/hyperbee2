@@ -78,8 +78,8 @@ test('no prefetch when the current leaf covers the limit', async function (t) {
   t.is(it.prefetching, null, 'prefetch was skipped')
 })
 
-// a legacy-shaped tree: small degree, one write per key so the nodes spread
-// over many blocks, read by a second peer at the default degree
+// a small-degree tree, one write per key so the nodes spread over many
+// blocks, read by a second peer opened at the same degree
 async function createRemoteSkinnyTree(t) {
   const db = await create(t, { t: 2 })
   await db.ready()
@@ -90,7 +90,7 @@ async function createRemoteSkinnyTree(t) {
     await w.flush()
   }
 
-  const db2 = await create(t, { key: db.core.key })
+  const db2 = await create(t, { key: db.core.key, t: 2 })
   await db2.ready()
 
   replicate(t, db, db2)

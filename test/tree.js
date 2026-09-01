@@ -11,7 +11,7 @@ test('TreeNodePointer - equivalentTo', async function (t) {
   t.ok(ptr.equivalentTo(ptr), 'equal to self')
 
   // Create same pointer w/ value
-  const ptr2 = db.context.createTreeNode(0, 0, 0, false, new TreeNode([], []))
+  const ptr2 = db.context.createTreeNode(0, 0, 0, false, new TreeNode(0, [], []))
   t.absent(ptr.equivalentTo(ptr2), 'not equal w/ different values')
 })
 
