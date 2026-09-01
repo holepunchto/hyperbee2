@@ -9,14 +9,14 @@ const WriteBatch = require('./lib/write.js')
 const CoreContext = require('./lib/context.js')
 const SessionConfig = require('./lib/session-config.js')
 const { inflate, inflateValue } = require('./lib/inflate.js')
-const { EMPTY } = require('./lib/tree.js')
+const { EMPTY, T } = require('./lib/tree.js')
 
 class Hyperbee extends EventEmitter {
   constructor(store, opts = {}) {
     super()
 
     const {
-      t = 128,
+      t = T,
       key = null,
       encryption = null,
       getEncryptionProvider = toEncryptionProvider(encryption),
@@ -32,8 +32,7 @@ class Hyperbee extends EventEmitter {
         core,
         new NodeCache(maxCacheSize),
         core,
-        getEncryptionProvider,
-        t
+        getEncryptionProvider
       ),
       root = null,
       view = false,
@@ -45,6 +44,7 @@ class Hyperbee extends EventEmitter {
 
     this.store = store
     this.root = root
+    this.t = t
     this.context = context
     this.config = config.sub(activeRequests, timeout, wait, trace)
     this.view = view
@@ -97,6 +97,7 @@ class Hyperbee extends EventEmitter {
 
   _makeView(context, root, writable, unbatch) {
     return new Hyperbee(this.store, {
+      t: this.t,
       config: this.config,
       core: context.core,
       activeRequests: [],

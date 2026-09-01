@@ -1,6 +1,7 @@
 const test = require('brittle')
 const b4a = require('b4a')
 const { create } = require('./helpers')
+const { decodeBlock } = require('../lib/encoding.js')
 
 test('basic hyperbee1', async function (t) {
   const compatBatch = [
@@ -161,7 +162,7 @@ test('basic block 0', async function (t) {
   await snap.close()
 })
 
-test.solo('bigger block 0', async function (t) {
+test('bigger block 0', async function (t) {
   const block0Batch = [
     b4a.from('000000000601010000000001022330022330', 'hex'),
     b4a.from('0000000007000001020000000001000001022331022331', 'hex'),
@@ -293,3 +294,106 @@ test('encode bigger block0', async function (t) {
 
   t.is(expected.length, 0)
 })
+
+test('compat bubbles through latest-format writes', async function (t) {
+  // the 20 key hyperbee1 tree from the 'bigger hyperbee1' test
+  const compatBatch = [
+    b4a.from('0a086879706572626565', 'hex'),
+    b4a.from('0a050a030a0101120223301a022330', 'hex'),
+    b4a.from('0a060a040a020102120223311a022331', 'hex'),
+    b4a.from('0a070a050a03010203120223321a022332', 'hex'),
+    b4a.from('0a080a060a0401020304120223331a022333', 'hex'),
+    b4a.from('0a090a070a050102030405120223341a022334', 'hex'),
+    b4a.from('0a0a0a080a06010203040506120223351a022335', 'hex'),
+    b4a.from('0a0b0a090a0701020304050607120223361a022336', 'hex'),
+    b4a.from('0a0c0a0a0a080102030405060708120223371a022337', 'hex'),
+    b4a.from('0a1b0a090a01051204090109020a060a04010203040a060a0406070809120223381a022338', 'hex'),
+    b4a.from('0a140a090a0105120409010a010a070a05060708090a120223391a022339', 'hex'),
+    b4a.from('0a140a090a010512040b010a010a070a0501020b030412032331301a03233130', 'hex'),
+    b4a.from('0a150a090a010512040c010a010a080a0601020b0c030412032331311a03233131', 'hex'),
+    b4a.from('0a160a090a010512040d010a010a090a0701020b0c0d030412032331321a03233132', 'hex'),
+    b4a.from('0a170a090a010512040e010a010a0a0a0801020b0c0d0e030412032331331a03233133', 'hex'),
+    b4a.from(
+      '0a1e0a0c0a020d0512060f010f020a010a060a0401020b0c0a060a040e0f030412032331341a03233134',
+      'hex'
+    ),
+    b4a.from('0a170a0c0a020d0512060f0110010a010a070a050e0f10030412032331351a03233135', 'hex'),
+    b4a.from('0a180a0c0a020d0512060f0111010a010a080a060e0f1011030412032331361a03233136', 'hex'),
+    b4a.from('0a190a0c0a020d0512060f0112010a010a090a070e0f101112030412032331371a03233137', 'hex'),
+    b4a.from('0a1a0a0c0a020d0512060f0113010a010a0a0a080e0f10111213030412032331381a03233138', 'hex'),
+    b4a.from(
+      '0a210a0f0a030d120512080f01140114020a010a060a040e0f10110a060a041314030412032331391a03233139',
+      'hex'
+    )
+  ]
+
+  const db = await create(t)
+
+  await db.core.append(compatBatch)
+  db.update()
+
+  for (let i = 20; i < 60; i++) {
+    const w = db.write()
+    w.tryPut(b4a.from('#' + i), b4a.from('#' + i))
+    await w.flush()
+  }
+
+  const seq = db.core.length - 1
+  const head = decodeBlock(await db.core.get(seq), seq)
+  t.is(head.t, 5, 'rewritten blocks carry the tree degree')
+
+  // drop all cached nodes so the walk decodes from disk
+  db.cache.empty()
+  db.update()
+
+  const nodes = await walkNodes(db, await db.bootstrap(db.config), [])
+
+  t.ok(nodes.length > 1, 'sanity: tree has multiple nodes')
+  t.ok(
+    nodes.every((v) => v.t === 5),
+    'every node inflates with the compat degree'
+  )
+  t.ok(
+    nodes.every((v) => v.keys.length <= 9),
+    'compat max keys enforced across rewrites'
+  )
+
+  let count = 0
+  for await (const data of db.createReadStream()) count++ // eslint-disable-line no-unused-vars
+  t.is(count, 60)
+})
+
+test('latest-format writes stay non-compat', async function (t) {
+  const db = await create(t)
+
+  const w = db.write()
+  for (let i = 0; i < 30; i++) w.tryPut(b4a.from('#' + i), b4a.from('#' + i))
+  await w.flush()
+
+  const seq = db.core.length - 1
+  const head = decodeBlock(await db.core.get(seq), seq)
+  t.is(head.t, 0, 'latest blocks do not store a degree')
+
+  db.cache.empty()
+  db.update()
+
+  const nodes = await walkNodes(db, await db.bootstrap(db.config), [])
+
+  t.ok(
+    nodes.every((v) => v.t === 0),
+    'no node inflates with a stored degree'
+  )
+  t.ok(
+    nodes.some((v) => v.keys.length > 9),
+    'nodes are not limited to the compat degree'
+  )
+})
+
+async function walkNodes(db, ptr, out) {
+  const v = ptr.value || (await db.inflate(ptr, db.config))
+  out.push(v)
+  for (let i = 0; i < v.children.length; i++) {
+    await walkNodes(db, v.children.get(i), out)
+  }
+  return out
+}

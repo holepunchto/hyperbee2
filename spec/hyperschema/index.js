@@ -452,7 +452,7 @@ const encoding14 = {
     c.uint.preencode(state, m.type)
     c.uint.preencode(state, m.checkpoint)
     encoding6.preencode(state, m.batch)
-    state.end++ // max flag is 32 so always one byte
+    state.end++ // max flag is 64 so always one byte
 
     if (m.previous) encoding5.preencode(state, m.previous)
     if (m.metadata) encoding14_4.preencode(state, m.metadata)
@@ -460,6 +460,7 @@ const encoding14 = {
     if (m.keys) encoding14_6.preencode(state, m.keys)
     if (m.values) encoding14_7.preencode(state, m.values)
     if (m.cohorts) encoding14_8.preencode(state, m.cohorts)
+    if (m.t) c.uint.preencode(state, m.t)
   },
   encode(state, m) {
     const flags =
@@ -468,7 +469,8 @@ const encoding14 = {
       (m.tree ? 4 : 0) |
       (m.keys ? 8 : 0) |
       (m.values ? 16 : 0) |
-      (m.cohorts ? 32 : 0)
+      (m.cohorts ? 32 : 0) |
+      (m.t ? 64 : 0)
 
     c.uint.encode(state, m.type)
     c.uint.encode(state, m.checkpoint)
@@ -481,6 +483,7 @@ const encoding14 = {
     if (m.keys) encoding14_6.encode(state, m.keys)
     if (m.values) encoding14_7.encode(state, m.values)
     if (m.cohorts) encoding14_8.encode(state, m.cohorts)
+    if (m.t) c.uint.encode(state, m.t)
   },
   decode(state) {
     const r0 = c.uint.decode(state)
@@ -497,7 +500,8 @@ const encoding14 = {
       tree: (flags & 4) !== 0 ? encoding14_5.decode(state) : null,
       keys: (flags & 8) !== 0 ? encoding14_6.decode(state) : null,
       values: (flags & 16) !== 0 ? encoding14_7.decode(state) : null,
-      cohorts: (flags & 32) !== 0 ? encoding14_8.decode(state) : null
+      cohorts: (flags & 32) !== 0 ? encoding14_8.decode(state) : null,
+      t: (flags & 64) !== 0 ? c.uint.decode(state) : 0
     }
   }
 }
