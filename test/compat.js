@@ -1,7 +1,9 @@
 const test = require('brittle')
 const b4a = require('b4a')
+const c = require('compact-encoding')
 const { create } = require('./helpers')
 const { decodeBlock } = require('../lib/encoding.js')
+const { getEncoding } = require('../spec/hyperschema')
 
 test('basic hyperbee1', async function (t) {
   const compatBatch = [
@@ -371,7 +373,8 @@ test('latest-format writes stay non-compat', async function (t) {
   await w.flush()
 
   const seq = db.core.length - 1
-  const head = decodeBlock(await db.core.get(seq), seq)
+  const Block1 = getEncoding('@bee/block-1')
+  const head = c.decode(Block1, await db.core.get(seq))
   t.is(head.t, 0, 'latest blocks do not store a degree')
 
   db.cache.empty()
