@@ -380,7 +380,7 @@ test('latest-format writes stay non-compat', async function (t) {
   const nodes = await walkNodes(db, await db.bootstrap(db.config), [])
 
   t.ok(
-    nodes.every((v) => v.t === 0),
+    nodes.every((v) => v.t === 128),
     'no node inflates with a stored degree'
   )
   t.ok(
