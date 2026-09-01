@@ -114,6 +114,7 @@ test('migrating by copy from t = 5 to t = 128', async function (t) {
       'got t = 128 for root block'
     )
     t.is(decodeBlock(await db.context.core.get(0)).t, 5, 'old blocks still exist')
+    await db.close()
   }
 })
 
