@@ -2,7 +2,7 @@ const test = require('brittle')
 const b4a = require('b4a')
 const Corestore = require('corestore')
 const Bee = require('../')
-const { TYPE_LATEST, TYPE_COMPAT } = require('../lib/encoding.js')
+const { TYPE_LATEST, TYPE_COMPAT, decodeBlock } = require('../lib/encoding.js')
 const { create, replicate } = require('./helpers')
 
 const INFLIGHT_RANGE = [256, 512]
@@ -60,6 +60,57 @@ test('basic, two batches', async function (t) {
   t.alike((await db.get(b4a.from('hej'))).value, b4a.from('verden'))
   t.alike((await db.get(b4a.from('hello'))).value, b4a.from('world'))
   t.alike((await db.get(b4a.from('hola'))).value, b4a.from('mundo'))
+})
+
+test('migrating by copy from t = 5 to t = 128', async function (t) {
+  const storage = await t.tmp()
+
+  const migrationEntries = new Map()
+
+  {
+    const store = new Corestore(storage)
+    const db = new Bee(store, { t: 5 })
+
+    {
+      const w = db.write()
+      for (let i = 0; i < 256; i++) {
+        const key = b4a.from('k' + String(i).padStart(3, 0))
+        const value = b4a.from('v' + String(i).padStart(3, 0))
+        w.tryPut(key, value)
+        migrationEntries.set(key, value)
+      }
+      await w.flush()
+    }
+
+    t.alike((await db.get(b4a.from('k001'))).value, b4a.from('v001'))
+    t.is(db.root.value.t, 5, 'root has value 5')
+
+    await db.close()
+  }
+
+  t.comment('migrate')
+  {
+    const store = new Corestore(storage)
+    const db = new Bee(store)
+    await db.ready()
+
+    t.is(db.t, 128, 'bee is now default value t')
+
+    db.move({ key: db.core.key, length: 0 })
+    {
+      const w = db.write()
+      for (const [key, value] of migrationEntries.entries()) {
+        w.tryPut(key, value)
+      }
+      await w.flush()
+    }
+
+    t.is(db.root.value.t, 128, 'bee still default value t')
+
+    t.alike((await db.get(b4a.from('k001'))).value, b4a.from('v001'))
+    t.is(decodeBlock(await db.context.core.get(db.context.core.length - 1)).t, 128, 'got t = 128 for root block')
+    t.is(decodeBlock(await db.context.core.get(0)).t, 5, 'old blocks still exist')
+  }
 })
 
 test('basic, bigger (empty cache)', async function (t) {
