@@ -108,7 +108,11 @@ test('migrating by copy from t = 5 to t = 128', async function (t) {
     t.is(db.root.value.t, 128, 'bee still default value t')
 
     t.alike((await db.get(b4a.from('k001'))).value, b4a.from('v001'))
-    t.is(decodeBlock(await db.context.core.get(db.context.core.length - 1)).t, 128, 'got t = 128 for root block')
+    t.is(
+      decodeBlock(await db.context.core.get(db.context.core.length - 1)).t,
+      128,
+      'got t = 128 for root block'
+    )
     t.is(decodeBlock(await db.context.core.get(0)).t, 5, 'old blocks still exist')
   }
 })
