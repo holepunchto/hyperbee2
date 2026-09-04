@@ -1048,7 +1048,7 @@ function runFuzz(T) {
 
     for (let i = 0; i < ITERATIONS; i++) {
       const n = (Math.random() * BATCH) | 0
-      const undo = Math.random() < 0.01 && !undid
+      const undo = Math.random() < 0.01 && !undid && checkpoints.length > 0
       const l = Math.floor(Math.random() * checkpoints.length)
       const c = checkpoints[l]
 
