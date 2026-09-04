@@ -1006,9 +1006,27 @@ const BATCH = 20
 runFuzz(128, LEGACY, LEGACY_BATCH, KEY_SPACE, ITERATIONS, BATCH)
 runFuzz(5, LEGACY, LEGACY_BATCH, KEY_SPACE, ITERATIONS, BATCH)
 
+runFuzz(
+  Math.random() < 0.5 ? 5 : 128,
+  Math.random() * 10_000,
+  Math.random() * 3,
+  100_000,
+  Math.random() * 200,
+  Math.random() * 20
+)
+
 function runFuzz(T, LEGACY, LEGACY_BATCH, KEY_SPACE, ITERATIONS, BATCH) {
-  test('random fuzz (2k rounds) (T=' + T + ')', async function (t) {
-    t.timeout(120_000)
+  LEGACY = Math.floor(LEGACY)
+  LEGACY_BATCH = Math.max(1, Math.floor(LEGACY_BATCH))
+  KEY_SPACE = Math.max(1, Math.floor(KEY_SPACE))
+  ITERATIONS = Math.max(1, Math.floor(ITERATIONS))
+  BATCH = Math.floor(BATCH)
+
+  test.solo('random fuzz', async function (t) {
+    t.comment(
+      `T=${T}, LEGACY=${LEGACY}, LEGACY_BATCH=${LEGACY_BATCH}, KEY_SPACE=${KEY_SPACE}, ITERATIONS=${ITERATIONS}, BATCH=${BATCH}`
+    )
+    t.timeout(30 * 60 * 1000)
 
     const db = await create(t, { t: T })
     let cnt = 0
