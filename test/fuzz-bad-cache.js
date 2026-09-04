@@ -1,6 +1,6 @@
 const test = require('brittle')
 const b4a = require('b4a')
-const { create, createMultiple } = require('./helpers')
+const { create } = require('./helpers')
 
 test('fuzz - dirty cache regression', async function (t) {
   const db = await create(t, { t: 5 })
@@ -24009,8 +24009,6 @@ test('fuzz - dirty cache regression', async function (t) {
     const key = db.core.key
     checkpoints.push({ key, length: db.core.length, history: history.length })
   }
-
-  const anchor = checkpoints.length
 
   {
     const w = db.write()
