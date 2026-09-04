@@ -997,18 +997,18 @@ test('fuzz regression #n', async function (t) {
   t.pass('left blank for next regression')
 })
 
-runFuzz(128)
-runFuzz(5)
+const LEGACY = 0
+const LEGACY_BATCH = 1
+const KEY_SPACE = 10_000
+const ITERATIONS = 2000
+const BATCH = 20
 
-function runFuzz(T) {
+runFuzz(128, LEGACY, LEGACY_BATCH, KEY_SPACE, ITERATIONS, BATCH)
+runFuzz(5, LEGACY, LEGACY_BATCH, KEY_SPACE, ITERATIONS, BATCH)
+
+function runFuzz(T, LEGACY, LEGACY_BATCH, KEY_SPACE, ITERATIONS, BATCH) {
   test('random fuzz (2k rounds) (T=' + T + ')', async function (t) {
     t.timeout(120_000)
-
-    const LEGACY = 0
-    const LEGACY_BATCH = 1
-    const KEY_SPACE = 10_000
-    const ITERATIONS = 2000
-    const BATCH = 20
 
     const db = await create(t, { t: T })
     let cnt = 0
