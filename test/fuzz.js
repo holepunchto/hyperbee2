@@ -997,123 +997,220 @@ test('fuzz regression #n', async function (t) {
   t.pass('left blank for next regression')
 })
 
-test('random fuzz (2k rounds)', async function (t) {
-  t.timeout(120_000)
+const LEGACY = 0
+const LEGACY_BATCH = 1
+const KEY_SPACE = 10_000
+const ITERATIONS = 2000
+const BATCH = 20
 
-  const db = await create(t)
-  let cnt = 0
+runFuzz(128, LEGACY, LEGACY_BATCH, KEY_SPACE, ITERATIONS, BATCH)
+runFuzz(5, LEGACY, LEGACY_BATCH, KEY_SPACE, ITERATIONS, BATCH)
 
-  const expected = new Map()
-  const log = []
+runFuzz(
+  Math.random() < 0.5 ? 5 : 128,
+  Math.random() * 10_000,
+  Math.random() * 3,
+  100_000,
+  Math.random() * 200,
+  Math.random() * 20
+)
 
-  for (let i = 0; i < 2000; i++) {
-    const n = (Math.random() * 10) | 0
-    const w = db.write()
-    log.push('{')
-    log.push('  const w = db.write()')
-    for (let j = 0; j < n; j++) {
-      cnt++
-      const put = Math.random() < 0.8
-      const k = b4a.from('' + ((Math.random() * 10_000) | 0))
-      if (put) {
-        expected.set(k.toString(), k)
-        log.push(`  expected.set('${k.toString()}', '${k.toString()}')`)
-        log.push(`  w.tryPut(b4a.from('${k.toString()}'), b4a.from('${k.toString()}'))`)
+function runFuzz(T, LEGACY, LEGACY_BATCH, KEY_SPACE, ITERATIONS, BATCH) {
+  LEGACY = Math.floor(LEGACY)
+  LEGACY_BATCH = Math.max(1, Math.floor(LEGACY_BATCH))
+  KEY_SPACE = Math.max(1, Math.floor(KEY_SPACE))
+  ITERATIONS = Math.max(1, Math.floor(ITERATIONS))
+  BATCH = Math.floor(BATCH)
+
+  test.solo('random fuzz', async function (t) {
+    t.comment(
+      `T=${T}, LEGACY=${LEGACY}, LEGACY_BATCH=${LEGACY_BATCH}, KEY_SPACE=${KEY_SPACE}, ITERATIONS=${ITERATIONS}, BATCH=${BATCH}`
+    )
+    t.timeout(30 * 60 * 1000)
+
+    const db = await create(t, { t: T })
+    let cnt = 0
+
+    const expected = new Map()
+    const log = []
+    const history = []
+    const checkpoints = []
+
+    let undid = false
+
+    for (let i = 0; i < LEGACY; i++) {
+      const w = db.write({ compat: true })
+      log.push('{')
+      log.push('  const w = db.write({ compat: true })')
+
+      for (let j = 0; j < LEGACY_BATCH; j++) {
+        const k = b4a.from('' + ((Math.random() * KEY_SPACE) | 0))
         w.tryPut(k, k)
+        expected.set(k.toString(), k)
+        history.push([k.toString(), k])
+
+        log.push(`  expected.set('${k.toString()}', '${k.toString()}')`)
+        log.push(`  history.push(['${k.toString()}', '${k.toString()}'])`)
+        log.push(`  w.tryPut(b4a.from('${k.toString()}'), b4a.from('${k.toString()}'))`)
+      }
+
+      await w.flush()
+      const key = db.core.key
+      checkpoints.push({ key, length: db.core.length, history: history.length })
+
+      log.push('  await w.flush()')
+      log.push(`  const key = db.core.key`)
+      log.push(`  checkpoints.push({ key, length: db.core.length, history: history.length })`)
+      log.push('}')
+    }
+
+    for (let i = 0; i < ITERATIONS; i++) {
+      const n = (Math.random() * BATCH) | 0
+      const undo = Math.random() < 0.01 && !undid && checkpoints.length > 0
+      const l = Math.floor(Math.random() * checkpoints.length)
+      const c = checkpoints[l]
+
+      log.push('{')
+      if (undo) {
+        undid = true
+
+        expected.clear()
+        for (let i = 0; i < c.history; i++) {
+          const [key, value] = history[i]
+          if (value === null) expected.delete(key)
+          else expected.set(key, value)
+        }
+
+        log.push('  // undo event')
+        log.push(`  const c = checkpoints[${l}]`)
+        log.push('  expected.clear()')
+        log.push('  for (let i = 0; i < c.history; i++) {')
+        log.push(`    const [key, value] = history[i]`)
+        log.push(`    if (value === null) expected.delete(key)`)
+        log.push(`    else expected.set(key, value)`)
+        log.push('  }')
+        log.push('')
+        log.push('  const w = db.write({ key: db.core.key, length: c.length })')
       } else {
-        expected.delete(k.toString())
-        log.push(`  expected.delete('${k.toString()}')`)
-        log.push(`  w.tryDelete(b4a.from('${k.toString()}'))`)
-        w.tryDelete(k)
+        log.push('  const w = db.write()')
+      }
+
+      const w = undo ? db.write({ key: c.key, length: c.length }) : db.write()
+
+      for (let j = 0; j < n; j++) {
+        cnt++
+        const put = Math.random() < 0.8
+        const k = b4a.from('' + ((Math.random() * KEY_SPACE) | 0))
+        if (put) {
+          expected.set(k.toString(), k)
+          history.push([k.toString(), k])
+          log.push(`  expected.set('${k.toString()}', '${k.toString()}')`)
+          log.push(`  history.push(['${k.toString()}', '${k.toString()}'])`)
+          log.push(`  w.tryPut(b4a.from('${k.toString()}'), b4a.from('${k.toString()}'))`)
+          w.tryPut(k, k)
+        } else {
+          expected.delete(k.toString())
+          history.push([k.toString(), null])
+          log.push(`  expected.delete('${k.toString()}')`)
+          log.push(`  history.push(['${k.toString()}', null])`)
+          log.push(`  w.tryDelete(b4a.from('${k.toString()}'))`)
+          w.tryDelete(k)
+        }
+      }
+      log.push('  await w.flush()')
+      log.push(`  const key = db.core.key`)
+      log.push(`  checkpoints.push({ key, length: db.core.length, history: history.length })`)
+      log.push('}')
+      try {
+        await w.flush()
+        const key = db.core.key
+        checkpoints.push({ key, length: db.core.length, history: history.length })
+      } catch (err) {
+        dump()
+        // makes it easier to flush if teeing....
+        await new Promise((r) => setTimeout(r, 5_000))
+        throw err
       }
     }
-    log.push('  await w.flush()')
-    log.push('}')
-    try {
-      await w.flush()
-    } catch (err) {
-      dump()
-      // makes it easier to flush if teeing....
-      await new Promise((r) => setTimeout(r, 5_000))
-      throw err
-    }
-  }
 
-  const sorted = [...expected.values()].sort(b4a.compare)
-  const actual = []
-
-  for await (const data of db.createReadStream()) {
-    actual.push(data.key)
-  }
-
-  if (!alike(actual, sorted, {})) {
-    t.comment('ran ' + cnt + ' total ops')
-    return
-  }
-
-  for (let i = 0; i < 10; i++) {
-    const start = sorted[(Math.random() * sorted.length) | 0]
-    const end = sorted[(Math.random() * sorted.length) | 0]
-    const opts = {}
-
-    if (Math.random() < 0.3) opts.gte = start
-    else if (Math.random() < 0.3) opts.gt = start
-
-    if (Math.random() < 0.3) opts.lte = end
-    else if (Math.random() < 0.3) opts.lt = end
-
-    if (Math.random() < 0.5) opts.reverse = true
-
+    const sorted = [...expected.values()].sort(b4a.compare)
     const actual = []
 
-    for await (const data of db.createReadStream(opts)) {
+    for await (const data of db.createReadStream()) {
       actual.push(data.key)
     }
 
-    const expected = []
-    for (const s of sorted) {
-      const a = b4a.compare(start, s)
-      const b = b4a.compare(s, end)
-
-      if (
-        (opts.gte ? a <= 0 : opts.gt ? a < 0 : true) &&
-        (opts.lte ? b <= 0 : opts.lt ? b < 0 : true)
-      ) {
-        expected.push(s)
-      }
+    if (!alike(actual, sorted, {})) {
+      t.comment('ran ' + cnt + ' total ops')
+      return
     }
 
-    if (opts.reverse) expected.reverse()
+    for (let i = 0; i < 10; i++) {
+      const start = sorted[(Math.random() * sorted.length) | 0]
+      const end = sorted[(Math.random() * sorted.length) | 0]
+      const opts = {}
 
-    if (!alike(actual, expected, opts)) return
-  }
+      if (Math.random() < 0.3) opts.gte = start
+      else if (Math.random() < 0.3) opts.gt = start
 
-  function alike(actual, expected, opts) {
-    t.alike(actual, expected)
+      if (Math.random() < 0.3) opts.lte = end
+      else if (Math.random() < 0.3) opts.lt = end
 
-    if (b4a.equals(b4a.concat(expected), b4a.concat(actual))) return
-    dump(opts)
-  }
+      if (Math.random() < 0.5) opts.reverse = true
 
-  function dump(opts = {}) {
-    let s = 'const db = await create(t)\n\n'
-    s += 'const expected = new Map()\n'
-    s += '\n'
-    s += log.join('\n')
-    s += '\n'
-    s += '\n'
-    s += 'const query = {\n'
-    s += '  gte: ' + (opts.gte ? "b4a.from('" + b4a.toString(opts.gte) + "')" : 'null') + ',\n'
-    s += '  gt: ' + (opts.gt ? "b4a.from('" + b4a.toString(opts.gt) + "')" : 'null') + ',\n'
-    s += '  lte: ' + (opts.lte ? "b4a.from('" + b4a.toString(opts.lte) + "')" : 'null') + ',\n'
-    s += '  lt: ' + (opts.lt ? "b4a.from('" + b4a.toString(opts.lt) + "')" : 'null') + ',\n'
-    s += '  reverse: ' + !!opts.reverse + '\n'
-    s += '}\n\n'
-    s += 'const actual = []\n\n'
-    s += 'for await (const data of db.createReadStream(query)) {\n'
-    s += '  actual.push(b4a.toString(data.key))\n'
-    s += '}\n\n'
-    s += 't.alike(actual, [...expected.values()].sort())\n'
-    console.log(s)
-  }
-})
+      const actual = []
+
+      for await (const data of db.createReadStream(opts)) {
+        actual.push(data.key)
+      }
+
+      const expected = []
+      for (const s of sorted) {
+        const a = b4a.compare(start, s)
+        const b = b4a.compare(s, end)
+
+        if (
+          (opts.gte ? a <= 0 : opts.gt ? a < 0 : true) &&
+          (opts.lte ? b <= 0 : opts.lt ? b < 0 : true)
+        ) {
+          expected.push(s)
+        }
+      }
+
+      if (opts.reverse) expected.reverse()
+
+      if (!alike(actual, expected, opts)) return
+    }
+
+    function alike(actual, expected, opts) {
+      t.alike(actual, expected)
+
+      if (b4a.equals(b4a.concat(expected), b4a.concat(actual))) return
+      dump(opts)
+    }
+
+    function dump(opts = {}) {
+      let s = `const db = await create(t, { t: ${T} })\n\n`
+      s += 'const expected = new Map()\n'
+      s += 'const history = []\n'
+      s += 'const checkpoints = []\n'
+      s += '\n'
+      s += log.join('\n')
+      s += '\n'
+      s += '\n'
+      s += 'const query = {\n'
+      s += '  gte: ' + (opts.gte ? "b4a.from('" + b4a.toString(opts.gte) + "')" : 'null') + ',\n'
+      s += '  gt: ' + (opts.gt ? "b4a.from('" + b4a.toString(opts.gt) + "')" : 'null') + ',\n'
+      s += '  lte: ' + (opts.lte ? "b4a.from('" + b4a.toString(opts.lte) + "')" : 'null') + ',\n'
+      s += '  lt: ' + (opts.lt ? "b4a.from('" + b4a.toString(opts.lt) + "')" : 'null') + ',\n'
+      s += '  reverse: ' + !!opts.reverse + '\n'
+      s += '}\n\n'
+      s += 'const actual = []\n\n'
+      s += 'for await (const data of db.createReadStream(query)) {\n'
+      s += '  actual.push(b4a.toString(data.key))\n'
+      s += '}\n\n'
+      s += 't.alike(actual, [...expected.values()].sort())\n'
+      console.log(s)
+    }
+  })
+}
