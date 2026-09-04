@@ -1001,7 +1001,7 @@ runFuzz(128)
 runFuzz(5)
 
 function runFuzz(T) {
-  test('random fuzz (2k rounds) (T=' + T +')', async function (t) {
+  test('random fuzz (2k rounds) (T=' + T + ')', async function (t) {
     t.timeout(120_000)
 
     const LEGACY = 0
