@@ -1022,7 +1022,7 @@ function runFuzz(T, LEGACY, LEGACY_BATCH, KEY_SPACE, ITERATIONS, BATCH) {
   ITERATIONS = Math.max(1, Math.floor(ITERATIONS))
   BATCH = Math.floor(BATCH)
 
-  test.solo('random fuzz', async function (t) {
+  test('random fuzz', async function (t) {
     t.comment(
       `T=${T}, LEGACY=${LEGACY}, LEGACY_BATCH=${LEGACY_BATCH}, KEY_SPACE=${KEY_SPACE}, ITERATIONS=${ITERATIONS}, BATCH=${BATCH}`
     )
