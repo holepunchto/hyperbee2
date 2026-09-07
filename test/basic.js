@@ -1109,3 +1109,36 @@ test('inflight range - secondary core opened via context.getContextByKey()', asy
   const ctx = db2.context.getContextByKey(db1.core.key)
   t.alike(ctx.core.replicator.inflightRange, INFLIGHT_RANGE)
 })
+
+test('cores() lists the own core and referenced cores', async function (t) {
+  const db1 = await create(t)
+  {
+    const w = db1.write()
+    w.tryPut(b4a.from('a'), b4a.from('1'))
+    await w.flush()
+  }
+
+  const db2 = await create(t)
+  replicate(t, db1, db2)
+
+  // only itself before referencing anything
+  t.alike(await db2.cores(), [db2.core.key])
+  t.alike(await db2.cores({ local: false }), [])
+
+  // writing on top of a foreign head references db1's core
+  const w = db2.write(db1.head())
+  w.tryPut(b4a.from('b'), b4a.from('2'))
+  await w.flush()
+
+  t.alike(await db1.cores(), [db1.core.key])
+  t.alike(await db2.cores(), [db2.core.key, db1.core.key])
+  t.alike(await db2.cores({ local: false }), [db1.core.key])
+
+  // a fresh reader has to inflate the checkpoint to discover the cores
+  const reader = await create(t, { key: db2.core.key, writable: false })
+  replicate(t, db2, reader)
+  await reader.core.update({ wait: true })
+
+  t.alike(await reader.cores(), [db2.core.key, db1.core.key])
+  t.alike(await reader.cores({ local: false }), [db1.core.key])
+})

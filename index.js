@@ -180,6 +180,23 @@ class Hyperbee extends EventEmitter {
     this.emit('close')
   }
 
+  async cores({ local = true, ...opts } = {}) {
+    const config = this.config.options(opts)
+    await this.ready()
+    await this.context.update(config)
+
+    const cores = []
+
+    // index 0 is the core this bee is viewing, the rest are referenced cores
+    for (let i = 0; i <= this.context.cores.length; i++) {
+      const key = this.context.getCoreKey(i)
+      if (!local && b4a.equals(key, this.context.local.key)) continue
+      cores.push(key)
+    }
+
+    return cores
+  }
+
   createReadStream(options) {
     return new RangeStream(this, options)
   }
