@@ -1797,7 +1797,9 @@ test('cache - a node stays indexed after being bumped again', async function (t)
 
   for (let i = 0; i < 600; i += 50) {
     const w = db.write()
-    for (let j = i; j < i + 50; j++) w.tryPut(b4a.from('k' + String(j).padStart(5, '0')), b4a.from('v'))
+    for (let j = i; j < i + 50; j++) {
+      w.tryPut(b4a.from('k' + String(j).padStart(5, '0')), b4a.from('v'))
+    }
     await w.flush()
   }
 
