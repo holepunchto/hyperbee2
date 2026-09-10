@@ -13,6 +13,7 @@ async function runTests() {
   await import('./diff.js')
   await import('./fuzz.js')
   await import('./fuzz-bad-cache.js')
+  await import('./perf.js')
   await import('./prefetch.js')
   await import('./tree.js')
   await import('./undo.js')
