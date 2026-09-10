@@ -14,6 +14,7 @@ async function runTests() {
   await import('./fuzz.js')
   await import('./fuzz-bad-cache.js')
   await import('./fuzz-diff.js')
+  await import('./fuzz-multiwriter.js')
   await import('./perf.js')
   await import('./prefetch.js')
   await import('./tree.js')
