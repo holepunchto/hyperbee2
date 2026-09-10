@@ -1743,6 +1743,78 @@ test('diff cross-writer builds long chain then compares ends', async function (t
   await snap0.close()
 })
 
+test('diff - shared subtrees are skipped without inflating them', async function (t) {
+  // keys are written interleaved across 16 prefixes, so every leaf holds keys
+  // from many different blocks and inflating a leaf costs about one read per key
+  let reads = 0
+  const db = await create(t, { trace: () => reads++ })
+
+  const N = 5000
+  for (let i = 0; i < N; i += 50) {
+    const w = db.write()
+    for (let j = i; j < i + 50; j++) w.tryPut(key(j), b4a.from('v' + j))
+    await w.flush()
+  }
+
+  const snap = db.snapshot()
+
+  {
+    const w = db.write()
+    w.tryPut(key(N), b4a.from('new'))
+    await w.flush()
+  }
+
+  db.context.cache.empty()
+  reads = 0
+  await db.get(key(N >> 1))
+  const getReads = reads
+
+  db.context.cache.empty()
+  reads = 0
+  const entries = await collect(snap.createDiffStream(db))
+  const diffReads = reads
+
+  t.is(entries.length, 1)
+  t.is(entries[0].left, null)
+  t.alike(entries[0].right.key, key(N))
+
+  // only both roots and both versions of the one changed leaf should be inflated
+  t.ok(diffReads < 6 * getReads, `diff read ${diffReads} blocks, a get read ${getReads}`)
+
+  reads = 0
+  await collect(snap.createDiffStream(db))
+  t.is(reads, 0, 'a second diff is served from the node cache')
+
+  await snap.close()
+
+  function key(i) {
+    return b4a.from(String(i % 16).padStart(2, '0') + '/' + String(i).padStart(9, '0'))
+  }
+})
+
+test('cache - a node stays indexed after being bumped again', async function (t) {
+  const db = await create(t)
+
+  for (let i = 0; i < 600; i += 50) {
+    const w = db.write()
+    for (let j = i; j < i + 50; j++) {
+      w.tryPut(b4a.from('k' + String(j).padStart(5, '0')), b4a.from('v'))
+    }
+    await w.flush()
+  }
+
+  const root = db.root
+  const v = await db.inflate(root, db.config)
+  await db.inflate(v.children.get(0), db.config) // some other node is now most recent
+  db.bump(root) // moves root back to the front of the lru
+
+  t.is(db.context.cache.get(root), root, 'root is still in the cache index')
+
+  const co = db.checkout({ length: db.head().length })
+  t.is(co.root, root, 'checkout reuses the cached root')
+  await co.close()
+})
+
 async function collect(stream) {
   const entries = []
   for await (const entry of stream) {
