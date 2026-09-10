@@ -79,3 +79,39 @@ test('compressed array commit without updates keeps the delta', function (t) {
   t.ok(c.delta !== arr.delta)
   t.is(arr.entries.length, 3)
 })
+
+test('cannot write on a head in the middle of a batch', async function (t) {
+  const db = await create(t, { t: 5 })
+
+  // big values force a multi-block batch: value-only blocks then a tail block
+  {
+    const w = db.write()
+    for (let i = 0; i < 3; i++) w.tryPut(b4a.from('k' + i), b4a.alloc(3000, i))
+    await w.flush()
+  }
+
+  const head = db.head()
+
+  // the tail block carries the tree; earlier seqs are value-only blocks
+  const tail = await db.context.getBlock(head.length - 1, 0, db.config)
+  t.is(tail.batch.end, 0, 'head points at the batch tail')
+  t.ok(tail.tree, 'tail block has a tree')
+
+  const mid = await db.context.getBlock(head.length - 2, 0, db.config)
+  t.not(mid.batch.end, 0, 'the previous block is mid-batch')
+  t.absent(mid.tree, 'mid-batch block has no tree')
+
+  // writing on the batch tail is fine
+  {
+    const w = db.write({ key: head.key, length: head.length })
+    w.tryPut(b4a.from('z'), b4a.from('z'))
+    await w.flush()
+  }
+
+  // writing on a mid-batch length throws instead of corrupting the tree
+  await t.exception(async function () {
+    const w = db.write({ key: head.key, length: head.length - 1 })
+    w.tryPut(b4a.from('y'), b4a.from('y'))
+    await w.flush()
+  }, /middle of a batch/)
+})
