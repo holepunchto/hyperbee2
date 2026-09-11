@@ -201,6 +201,12 @@ Options:
                                   // after each flush()?
   compat: false,                  // Boolean. Write blocks compatible with Hyperbee 1?
   type: encoding.TYPE_LATEST,     // Integer. Block format to use.
+  deltaMax: 16,                   // Integer. Max number of chained node deltas before they
+                                  // are compacted into a cohort. See "Compression" below.
+                                  // 0 for `compat`/`type: 0` blocks, which never compress.
+  deltaMin: 1,                    // Integer. Min number of trailing deltas worth compacting
+                                  // into a cohort together, rather than rewriting the node
+                                  // in full. Infinity for `compat`/`type: 0` blocks.
   inlineValueSize: 1024,          // Integer. Values smaller than this byte length are
                                   // written inline in the node. Larger values
                                   // are referenced via a pointer into the block.
