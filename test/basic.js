@@ -173,6 +173,33 @@ test('basic overwrite', async function (t) {
   t.alike(db.head(), head)
 })
 
+test('isGenesis', async function (t) {
+  const db = await create(t)
+
+  t.is(db.isGenesis(), false, 'false before ready')
+
+  await db.ready()
+
+  t.is(db.isGenesis(), true)
+  t.is(db.head().length, 0)
+
+  const w = db.write()
+  w.tryPut(b4a.from('a'), b4a.from('1'))
+  await w.flush()
+
+  t.is(db.isGenesis(), false)
+
+  const empty = db.checkout({ length: 0 })
+  await empty.ready()
+  t.is(empty.isGenesis(), true)
+  await empty.close()
+
+  const latest = db.checkout({ length: db.head().length })
+  await latest.ready()
+  t.is(latest.isGenesis(), false)
+  await latest.close()
+})
+
 test('empty noop batch', async function (t) {
   const db = await create(t)
 

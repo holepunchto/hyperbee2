@@ -93,6 +93,11 @@ Returns an object with the following properties:
 
 If the Hyperbee is not ready, this will return null.
 
+#### `db.isGenesis()`
+
+Returns true if the tree is empty, i.e. no blocks apply to it yet and `db.head().length` is 0.
+Returns false if the Hyperbee is not ready.
+
 #### `db.cache`
 
 Read only. The NodeCache used by this Hyperbee.
