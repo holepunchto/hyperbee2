@@ -72,6 +72,76 @@ test('offline reader can move to cached checkpoint after learning a newer length
   }
 })
 
+test('core table resolves from the referring block, not the tip of the core', async function (t) {
+  // db2 block 0 references db1, block 1 introduces a new checkpoint that also
+  // references db3, block 2 is a plain append. A reader that only has block 1
+  // locally must be able to resolve db3 from block 1's checkpoint without
+  // touching block 2 (the tip), which it does not have.
+  const db1 = await create(t)
+  {
+    const w = db1.write()
+    w.tryPut(b4a.from('a'), b4a.from('1'))
+    await w.flush()
+  }
+
+  const db3 = await create(t)
+  {
+    const w = db3.write()
+    w.tryPut(b4a.from('x'), b4a.from('9'))
+    await w.flush()
+  }
+
+  const db2 = await create(t)
+  replicate(t, db1, db2)
+  replicate(t, db3, db2)
+  {
+    const w = db2.write(db1.head())
+    w.tryPut(b4a.from('b'), b4a.from('2'))
+    await w.flush()
+  }
+  {
+    const w = db2.write(db3.head())
+    w.tryPut(b4a.from('c'), b4a.from('3'))
+    await w.flush()
+  }
+  {
+    const w = db2.write()
+    w.tryPut(b4a.from('d'), b4a.from('4'))
+    await w.flush()
+  }
+  t.is(db2.core.length, 3)
+
+  const store = new Corestore(await t.tmp())
+  t.teardown(() => store.close())
+
+  const reader = new Bee(store, { key: db2.core.key, writable: false })
+  t.teardown(() => reader.close())
+  await reader.ready()
+
+  const appended = new Promise((resolve) => reader.core.once('append', resolve))
+  const stop = replicateManual(reader, db2)
+  await appended
+  t.is(reader.core.length, 3)
+
+  // only fetch the block we are going to read from, never the tip
+  await reader.core.get(1)
+  await stop()
+
+  t.is(await reader.core.has(1), true)
+  t.is(await reader.core.has(2), false, 'tip is not local')
+
+  // db3 is reachable, db2 is not
+  const c3 = store.get({ key: db3.core.key })
+  await c3.ready()
+  replicate(t, reader, db3)
+  await c3.get(0)
+
+  reader.move({ length: 2 })
+
+  t.alike((await reader.get(b4a.from('x'), { wait: false })).value, b4a.from('9'))
+  t.alike((await reader.get(b4a.from('c'), { wait: false })).value, b4a.from('3'))
+})
+
 function replicateManual(a, b) {
   const s1 = a.replicate(true)
   const s2 = b.replicate(false)

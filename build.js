@@ -237,6 +237,11 @@ bee.register({
       required: true
     },
     {
+      name: 'seq',
+      type: 'uint',
+      constant: 0
+    },
+    {
       name: 'checkpoint',
       type: 'uint',
       required: true
@@ -287,6 +292,11 @@ bee.register({
       name: 'type',
       type: 'uint',
       required: true
+    },
+    {
+      name: 'seq',
+      type: 'uint',
+      constant: 0
     },
     {
       name: 'checkpoint',

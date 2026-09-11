@@ -27,7 +27,7 @@
     "compact-encoding": "^3.0.0",
     "hypercore": "^11.29.0",
     "hypercore-errors": "^1.5.0",
-    "hyperschema": "^1.14.0",
+    "hyperschema": "^1.26.1",
     "protocol-buffers-encodings": "^1.2.0",
     "scope-lock": "^1.2.4",
     "streamx": "^2.22.1"
