@@ -270,11 +270,17 @@
       "name": "block-0",
       "namespace": "bee",
       "compact": false,
-      "flagsPosition": 3,
+      "flagsPosition": 4,
       "fields": [
         {
           "name": "type",
           "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "seq",
+          "constant": 0,
           "type": "uint",
           "version": 1
         },
@@ -334,11 +340,17 @@
       "name": "block-1",
       "namespace": "bee",
       "compact": false,
-      "flagsPosition": 3,
+      "flagsPosition": 4,
       "fields": [
         {
           "name": "type",
           "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "seq",
+          "constant": 0,
           "type": "uint",
           "version": 1
         },

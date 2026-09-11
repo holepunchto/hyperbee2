@@ -278,14 +278,14 @@ class Hyperbee extends EventEmitter {
 
     while (n > 0 && length > 0 && expected === this.unbatch) {
       const seq = length - 1
-      const blk = await context.getBlock(seq, 0, config)
+      const blk = await context.getBlock(seq, 0, config, null)
 
       if (!blk.previous) {
         length = 0
         break
       }
 
-      context = await context.getContext(blk.previous.core, config)
+      context = await context.getContext(blk.previous.core, config, blk)
       length = blk.previous.seq + 1
       n--
     }
