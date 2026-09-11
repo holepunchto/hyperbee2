@@ -105,6 +105,10 @@ If the Hyperbee is not ready, this will return null.
 Returns true if the tree is empty, i.e. no blocks apply to it yet and `db.head().length` is 0.
 Returns false if the Hyperbee is not ready.
 
+#### `await db.compat()`
+
+Returns the block format (`type`) that the tree is currently written in, e.g. `encoding.TYPE_LATEST` or `encoding.TYPE_COMPAT`.
+
 #### `db.cache`
 
 Read only. The NodeCache used by this Hyperbee.
