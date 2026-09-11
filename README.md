@@ -92,7 +92,7 @@ Returns an object with the following properties:
 }
 ```
 
-If the Hyperbee is not ready, this will return null.
+If the Hyperbee is not ready, this will return `null`.
 
 #### `db.isGenesis()`
 
