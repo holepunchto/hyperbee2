@@ -4,10 +4,8 @@
 npm install hyperbee2
 ```
 
-Next major version for [hyperbee](https://github.com/holepunchto/hyperbee).
-Will be merged in there and released a new major when fully done.
-
-An append-only B-tree on top of a [Hypercore][hypercore].
+A P2P append-only multifork Bε-tree build on top of [Hypercore][hypercore].
+This is the next major version for [hyperbee](https://github.com/holepunchto/hyperbee).
 
 ## Usage
 
