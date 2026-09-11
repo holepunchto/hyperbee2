@@ -236,6 +236,12 @@ Options:
   lt: undefined,         // Buffer. Key upper bound (exclusive)
   highWaterMark: 16384,  // Size of read ahead buffer calculated
                          // as: number of entries * 1024
+  timeout: 0,            // Wait at most this many milliseconds (0 means no timeout).
+                         // Defaults to the value of the Hyperbee's timeout option.
+  wait: true,            // Wait for Hypercore to download blocks
+                         // Defaults to the value of the Hyperbee's wait option.
+  trace: null,           // Function(core, seq) called whenever a block is read.
+                         // Defaults to the value of the Hyperbee's trace option.
 }
 ```
 
