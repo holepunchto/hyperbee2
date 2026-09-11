@@ -34,10 +34,6 @@ console.log(name.value.toString()) // example
 console.log(email.value.toString()) // example@example.com
 ```
 
-## License
-
-Apache-2.0
-
 ## API
 
 ### Hyperbee
@@ -563,6 +559,10 @@ for await (const data of b.createReadStream(b)) {
 
 Closes the batch without flushing operations. Subsequent attempts
 to flush the batch will result in an error.
+
+## License
+
+Apache-2.0
 
 [hypercore]: https://github.com/holepunchto/hypercore
 [corestore]: https://github.com/holepunchto/corestore
