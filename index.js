@@ -61,6 +61,12 @@ class Hyperbee extends EventEmitter {
     return bee instanceof Hyperbee
   }
 
+  isGenesis() {
+    const head = this.head()
+    if (!head) return false
+    return head.length === 0
+  }
+
   head() {
     if (!this.root) return null
     if (this.root === EMPTY) return { length: 0, key: this.context.core.key }
