@@ -130,7 +130,7 @@ is ready.
 
 #### `db.closing`
 
-Read only. Initially null. When `db.close()` is called, this is set to
+Read only. Initially `null`. When `db.close()` is called, this is set to
 a Promise that resolves to `undefined` when the close completes.
 
 #### `db.opened`
