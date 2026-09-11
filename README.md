@@ -109,6 +109,18 @@ Returns false if the Hyperbee is not ready.
 
 Returns the block format (`type`) that the tree is currently written in, e.g. `encoding.TYPE_LATEST` or `encoding.TYPE_COMPAT`.
 
+#### `await db.cores([options])`
+
+Returns an array of the [Hypercore][hypercore] keys the Hyperbee references, i.e. its own core plus any other cores linked in via cross-tree writes (see [`db.write([options])`](#dbwriteoptions)).
+
+Options:
+
+```js
+{
+  local: true,  // Boolean. Include a Hyperbee's own core key in the result.
+}
+```
+
 #### `db.cache`
 
 Read only. The NodeCache used by this Hyperbee.
