@@ -415,6 +415,7 @@ Options:
 {
   timeout,  // Number: wait at most this many milliseconds (0 means no timeout)
   wait,     // Boolean: wait for Hypercore to download blocks
+  trace,    // Function(core, seq): called whenever a block is read
 }
 ```
 
