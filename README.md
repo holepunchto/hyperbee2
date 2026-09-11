@@ -337,6 +337,8 @@ Options:
                          // Defaults to the value of the Hyperbee's timeout option.
   wait: true,            // Wait for Hypercore to download blocks
                          // Defaults to the value of the Hyperbee's wait option.
+  trace: null,           // Function(core, seq) called whenever a block is read.
+                         // Defaults to the value of the Hyperbee's trace option.
 }
 ```
 
