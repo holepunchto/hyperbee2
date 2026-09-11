@@ -59,11 +59,18 @@ Options include:
   view: false,             // Is this a view of an open Hyperbee? (i.e. do not close underlying store)
   writable: true,          // Is append / truncate allowed on the underlying Hypercore?
   unbatch: 0,              // Number of write batches to rollback during bootstrap
-  autoUpdate: false,       // Reload root node when underlying Hypercore is appended to?
+  autoUpdate: !writable && !view, // Reload root node when underlying Hypercore is appended to?
   preload: null,           // A function called by ready() after the Hypercore is ready. Can be async.
   wait: true,              // Wait for Hypercore to download blocks
+  timeout: 0,              // Wait at most this many milliseconds for reads (0 means no timeout)
+  trace: null,             // Function(core, seq) called whenever a block is read, for debugging/metrics
+  encryption: null,        // { key } (or other Hypercore encryption options) used to load/create encrypted cores
+  getEncryptionProvider: null, // Function(key) -> encryption options, called per Hypercore key.
+                           // Defaults to always returning the `encryption` option above.
 }
 ```
+
+The user may provide a custom encryption module as `opts.encryption`, which should satisfy the [HypercoreEncryption](https://github.com/holepunchto/hypercore-encryption) interface.
 
 If you pass your own `core`, consider increasing the inflight range on it (`256` minimum recommended, e.g. `{ inflightRange: [256, 512] }` when creating the core via Corestore) to match `hyperbee2` constructed cores.
 
