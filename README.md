@@ -139,6 +139,8 @@ Options:
   writable: false,           // Boolean. Will the new tree be writable?
   length: this.core.length,  // Number. Length of blocks used from the Hypercore
   key: null,                 // Buffer or null. Key of the Hypercore
+  timeout: this.timeout,     // Number. Wait at most this many milliseconds per Hypercore read (0 means no timeout)
+  wait: this.wait,           // Boolean. Wait for Hypercore to download blocks
 }
 ```
 
@@ -157,14 +159,32 @@ Options:
 }
 ```
 
-#### `db.snapshot()`
+#### `db.snapshot([options])`
 
 Returns a new Hyperbee that is a read only view of the current tree.
 
-#### `db.undo(n)`
+Options:
+
+```js
+{
+  timeout: this.timeout,     // Number. Wait at most this many milliseconds per Hypercore read (0 means no timeout)
+  wait: this.wait,           // Boolean. Wait for Hypercore to download blocks
+}
+```
+
+#### `db.undo(n, [options])`
 
 Returns a new Hyperbee that is a writable view of the current tree,
 with the last `n` write batches ignored.
+
+Options:
+
+```js
+{
+  timeout: this.timeout,     // Number. Wait at most this many milliseconds per Hypercore read (0 means no timeout)
+  wait: this.wait,           // Boolean. Wait for Hypercore to download blocks
+}
+```
 
 #### `db.write([options])`
 
