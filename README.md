@@ -4,10 +4,8 @@
 npm install hyperbee2
 ```
 
-Next major version for [hyperbee](https://github.com/holepunchto/hyperbee).
-Will be merged in there and released a new major when fully done.
-
-An append-only B-tree on top of a [Hypercore][hypercore].
+A P2P append-only multifork Bε-tree build on top of [Hypercore][hypercore].
+This is the next major version for [hyperbee](https://github.com/holepunchto/hyperbee).
 
 ## Usage
 
@@ -36,10 +34,6 @@ console.log(name.value.toString()) // example
 console.log(email.value.toString()) // example@example.com
 ```
 
-## License
-
-Apache-2.0
-
 ## API
 
 ### Hyperbee
@@ -54,16 +48,23 @@ Options include:
 ```js
 {
   key: null,               // Buffer or String. Key of Hypercore to load via Corestore
-  maxCacheSize: 4096,      // Max number of nodes to keep in NodeCache
+  maxCacheSize: 4096,      // Integer. Max number of nodes to keep in NodeCache
   core: Hypercore(...),    // Hypercore within the Corestore to use (defaults to loading key, or using name='bee')
-  view: false,             // Is this a view of an open Hyperbee? (i.e. do not close underlying store)
-  writable: true,          // Is append / truncate allowed on the underlying Hypercore?
-  unbatch: 0,              // Number of write batches to rollback during bootstrap
-  autoUpdate: false,       // Reload root node when underlying Hypercore is appended to?
-  preload: null,           // A function called by ready() after the Hypercore is ready. Can be async.
-  wait: true,              // Wait for Hypercore to download blocks
+  view: false,             // Boolean. Is this a view of an open Hyperbee? (i.e. do not close underlying store)
+  writable: true,          // Boolean. Is append / truncate allowed on the underlying Hypercore?
+  unbatch: 0,              // Integer. Number of write batches to rollback during bootstrap
+  autoUpdate: !writable && !view, // Boolean. Reload root node when underlying Hypercore is appended to?
+  preload: null,           // Function. A function called by ready() after the Hypercore is ready. Can be async.
+  wait: true,              // Boolean. Wait for Hypercore to download blocks
+  timeout: 0,              // Integer. Wait at most this many milliseconds for reads (0 means no timeout)
+  trace: null,             // Function(core, seq). This function is called whenever a block is read, for debugging/metrics
+  encryption: null,        // { key } (or other Hypercore encryption options) used to load/create encrypted cores
+  getEncryptionProvider: null, // Function(key) -> encryption options, called per Hypercore key.
+                           // Defaults to always returning the `encryption` option above.
 }
 ```
+
+The user may provide a custom encryption module as `opts.encryption`, which should satisfy the [HypercoreEncryption](https://github.com/holepunchto/hypercore-encryption) interface.
 
 If you pass your own `core`, consider increasing the inflight range on it (`256` minimum recommended, e.g. `{ inflightRange: [256, 512] }` when creating the core via Corestore) to match `hyperbee2` constructed cores.
 
@@ -86,17 +87,33 @@ Returns an object with the following properties:
 
 ```
 {
-  length,  // Number of blocks from the start of Hypercore that apply to this tree.
+  length,  // Integer. Number of blocks from the start of Hypercore that apply to this tree.
   key,     // Buffer or null. The key of the underlying Hypercore.
 }
 ```
 
-If the Hyperbee is not ready, this will return null.
+If the Hyperbee is not ready, this will return `null`.
 
 #### `db.isGenesis()`
 
 Returns true if the tree is empty, i.e. no blocks apply to it yet and `db.head().length` is 0.
 Returns false if the Hyperbee is not ready.
+
+#### `await db.compat()`
+
+Returns the block format (`type`) that the tree is currently written in, e.g. `encoding.TYPE_LATEST` or `encoding.TYPE_COMPAT`.
+
+#### `await db.cores([options])`
+
+Returns an array of the [Hypercore][hypercore] keys the Hyperbee references, i.e. its own core plus any other cores linked in via cross-tree writes (see [`db.write([options])`](#dbwriteoptions)).
+
+Options:
+
+```js
+{
+  local: true,  // Boolean. Include a Hyperbee's own core key in the result.
+}
+```
 
 #### `db.cache`
 
@@ -113,7 +130,7 @@ is ready.
 
 #### `db.closing`
 
-Read only. Initially null. When `db.close()` is called, this is set to
+Read only. Initially `null`. When `db.close()` is called, this is set to
 a Promise that resolves to `undefined` when the close completes.
 
 #### `db.opened`
@@ -137,7 +154,7 @@ Options:
 ```js
 {
   writable: false,           // Boolean. Will the new tree be writable?
-  length: this.core.length,  // Number. Length of blocks used from the Hypercore
+  length: this.core.length,  // Integer. Length of blocks used from the Hypercore
   key: null,                 // Buffer or null. Key of the Hypercore
   timeout: this.timeout,     // Number. Wait at most this many milliseconds per Hypercore read (0 means no timeout)
   wait: this.wait,           // Boolean. Wait for Hypercore to download blocks
@@ -154,7 +171,7 @@ Options:
 ```js
 {
   writable: this.writable,   // Boolean. Is this tree writable after the move?
-  length: this.core.length,  // Number. Length of blocks used from the Hypercore
+  length: this.core.length,  // Integer. Length of blocks used from the Hypercore
   key: null,                 // Buffer or null. Key of the Hypercore
 }
 ```
@@ -194,20 +211,20 @@ Options:
 
 ```js
 {
-  length: -1,                     // Length of blocks used from the Hypercore
+  length: -1,                     // Integer. Length of blocks used from the Hypercore
                                   // (i.e. what point in the hypercore is the write
                                   // going to extend when flush() is called?).
                                   // If -1, the length will be calculated on flush()
                                   // using root.seq + 1.
   key: null,                      // Buffer or null. Key of the Hypercore.
-  autoUpdate: true,               // Boolean .Should Hyperbee automatically reflect updates
+  autoUpdate: true,               // Boolean. Should Hyperbee automatically reflect updates
                                   // after each flush()?
   compat: false,                  // Boolean. Write blocks compatible with Hyperbee 1?
-  type: encoding.TYPE_LATEST,     // Number. Block format to use.
-  inlineValueSize: 1024,          // Values smaller than this byte length are
+  type: encoding.TYPE_LATEST,     // Integer. Block format to use.
+  inlineValueSize: 1024,          // Integer. Values smaller than this byte length are
                                   // written inline in the node. Larger values
                                   // are referenced via a pointer into the block.
-  preferredBlockSize: 4096,       // Try to write blocks of approximately this size
+  preferredBlockSize: 4096,       // Integer. Try to write blocks of approximately this size
                                   // when flushing updates.
 }
 ```
@@ -231,8 +248,14 @@ Options:
   gt: undefined,         // Buffer. Key lower bound (exclusive)
   lte: undefined,        // Buffer. Key upper bound (inclusive)
   lt: undefined,         // Buffer. Key upper bound (exclusive)
-  highWaterMark: 16384,  // Size of read ahead buffer calculated
+  highWaterMark: 16384,  // Integer. Size of read ahead buffer calculated
                          // as: number of entries * 1024
+  timeout: 0,            // Integer. Wait at most this many milliseconds (0 means no timeout).
+                         // Defaults to the value of the Hyperbee's timeout option.
+  wait: true,            // Boolean. Wait for Hypercore to download blocks
+                         // Defaults to the value of the Hyperbee's wait option.
+  trace: null,           // Function(core, seq). This function is called whenever a block is read.
+                         // Defaults to the value of the Hyperbee's trace option.
 }
 ```
 
@@ -322,12 +345,14 @@ Options:
 ```js
 {
   head: null,            // null means use this.tree.head()
-  highWaterMark: 16384,  // Size of read ahead buffer calculated
+  highWaterMark: 16384,  // Integer. Size of read ahead buffer calculated
                          // as: number of entries * 1024
-  timeout: 0,            // Wait at most this many milliseconds (0 means no timeout).
+  timeout: 0,            // Integer. Wait at most this many milliseconds (0 means no timeout).
                          // Defaults to the value of the Hyperbee's timeout option.
-  wait: true,            // Wait for Hypercore to download blocks
+  wait: true,            // Boolean. Wait for Hypercore to download blocks
                          // Defaults to the value of the Hyperbee's wait option.
+  trace: null,           // Function(core, seq). This function is called whenever a block is read.
+                         // Defaults to the value of the Hyperbee's trace option.
 }
 ```
 
@@ -336,12 +361,12 @@ Iterating over the stream will yield:
 ```js
 {
   head: {
-    length,  // Number: number of blocks from the start of Hypercore
+    length,  // Integer: number of blocks from the start of Hypercore
              // that apply to this version of the tree
     key,     // Buffer or null: the key of the Hypercore for this version
   },
   tail: {
-    length,  // Number: number of blocks from the start of Hypercore
+    length,  // Integer: number of blocks from the start of Hypercore
              // that apply to the previous version of the tree
     key,     // Buffer or null: the key of the Hypercore for the previous
              // version
@@ -363,8 +388,8 @@ the following properties on success:
 ```js
 {
   core,    // Hypercore: the hypercore the entry is stored in
-  offset,  // Number: the index of the entry in the block
-  seq,     // Number: the sequence number of the block in the hypercore
+  offset,  // Integer: the index of the entry in the block
+  seq,     // Integer: the sequence number of the block in the hypercore
   key,     // Buffer: the key of the entry
   value,   // Buffer: the value of the entry
 }
@@ -391,8 +416,8 @@ the following properties on success:
 ```js
 {
   core,    // Hypercore: the hypercore the entry is stored in
-  offset,  // Number: the index of the entry in the block
-  seq,     // Number: the sequence number of the block in the hypercore
+  offset,  // Integer: the index of the entry in the block
+  seq,     // Integer: the sequence number of the block in the hypercore
   key,     // Buffer: the key of the entry
   value,   // Buffer: the value of the entry
 }
@@ -402,8 +427,9 @@ Options:
 
 ```js
 {
-  timeout,  // Number: wait at most this many milliseconds (0 means no timeout)
+  timeout,  // Integer: wait at most this many milliseconds (0 means no timeout)
   wait,     // Boolean: wait for Hypercore to download blocks
+  trace,    // Function(core, seq): called whenever a block is read
 }
 ```
 
@@ -553,6 +579,10 @@ for await (const data of b.createReadStream(b)) {
 
 Closes the batch without flushing operations. Subsequent attempts
 to flush the batch will result in an error.
+
+## License
+
+Apache-2.0
 
 [hypercore]: https://github.com/holepunchto/hypercore
 [corestore]: https://github.com/holepunchto/corestore

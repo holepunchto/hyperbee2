@@ -1,7 +1,7 @@
 {
   "name": "hyperbee2",
   "version": "2.15.0",
-  "description": "Scalable P2P BTree",
+  "description": "P2P Append-Only Multi-fork Bε-Tree",
   "main": "index.js",
   "files": [
     "index.js",
