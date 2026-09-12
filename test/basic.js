@@ -1169,3 +1169,86 @@ test('cores() lists the own core and referenced cores', async function (t) {
   t.alike(await reader.cores(), [db2.core.key, db1.core.key])
   t.alike(await reader.cores({ local: false }), [db1.core.key])
 })
+
+test('checkout with timeout and wait options', async function (t) {
+  const db = await create(t)
+
+  const w = db.write()
+  w.tryPut(b4a.from('a'), b4a.from('1'))
+  await w.flush()
+
+  // reader that never replicates, so every read of a missing block hangs
+  const reader = await create(t, { key: db.core.key })
+  await reader.ready()
+
+  const inherited = reader.checkout({ length: db.head().length })
+  t.is(inherited.config.timeout, reader.config.timeout, 'inherits timeout by default')
+  t.is(inherited.config.wait, reader.config.wait, 'inherits wait by default')
+  await inherited.close()
+
+  const timedOut = reader.checkout({ length: db.head().length, timeout: 100 })
+  t.is(timedOut.config.timeout, 100)
+  await t.exception(timedOut.get(b4a.from('a')), /REQUEST_TIMEOUT/)
+  await timedOut.close()
+
+  const noWait = reader.checkout({ length: db.head().length, wait: false })
+  t.is(noWait.config.wait, false)
+  await t.exception(noWait.get(b4a.from('a')), /BLOCK_NOT_AVAILABLE/)
+  await noWait.close()
+})
+
+test('snapshot with timeout and wait options', async function (t) {
+  const db = await create(t)
+
+  const w = db.write()
+  w.tryPut(b4a.from('a'), b4a.from('1'))
+  await w.flush()
+
+  const reader = await create(t, { key: db.core.key })
+  await reader.ready()
+  reader.move({ length: db.head().length })
+
+  const inherited = reader.snapshot()
+  t.is(inherited.config.timeout, reader.config.timeout, 'inherits timeout by default')
+  t.is(inherited.config.wait, reader.config.wait, 'inherits wait by default')
+  await inherited.close()
+
+  const timedOut = reader.snapshot({ timeout: 100 })
+  t.is(timedOut.config.timeout, 100)
+  await t.exception(timedOut.get(b4a.from('a')), /REQUEST_TIMEOUT/)
+  await timedOut.close()
+
+  const noWait = reader.snapshot({ wait: false })
+  t.is(noWait.config.wait, false)
+  await t.exception(noWait.get(b4a.from('a')), /BLOCK_NOT_AVAILABLE/)
+  await noWait.close()
+})
+
+test('undo with timeout and wait options', async function (t) {
+  const db = await create(t)
+
+  for (let i = 0; i < 2; i++) {
+    const w = db.write()
+    w.tryPut(b4a.from('a'), b4a.from('' + i))
+    await w.flush()
+  }
+
+  const reader = await create(t, { key: db.core.key })
+  await reader.ready()
+  reader.move({ length: db.head().length })
+
+  const inherited = reader.undo(1)
+  t.is(inherited.config.timeout, reader.config.timeout, 'inherits timeout by default')
+  t.is(inherited.config.wait, reader.config.wait, 'inherits wait by default')
+  await inherited.close()
+
+  const timedOut = reader.undo(1, { timeout: 100 })
+  t.is(timedOut.config.timeout, 100)
+  await t.exception(timedOut.get(b4a.from('a')), /REQUEST_TIMEOUT/)
+  await timedOut.close()
+
+  const noWait = reader.undo(1, { wait: false })
+  t.is(noWait.config.wait, false)
+  await t.exception(noWait.get(b4a.from('a')), /BLOCK_NOT_AVAILABLE/)
+  await noWait.close()
+})

@@ -101,12 +101,14 @@ class Hyperbee extends EventEmitter {
     return this.store.replicate(...opts)
   }
 
-  _makeView(context, root, writable, unbatch) {
+  _makeView(context, root, writable, unbatch, timeout, wait) {
     return new Hyperbee(this.store, {
       t: this.t,
       config: this.config,
       core: context.core,
       activeRequests: [],
+      timeout,
+      wait,
       context,
       root,
       view: true,
@@ -117,10 +119,16 @@ class Hyperbee extends EventEmitter {
     })
   }
 
-  checkout({ length = this.core.length, key = null, writable = false } = {}) {
+  checkout({
+    length = this.core.length,
+    key = null,
+    writable = false,
+    timeout = this.config.timeout,
+    wait = this.config.wait
+  } = {}) {
     const context = key ? this.context.getContextByKey(key) : this.context
     const root = length === 0 ? EMPTY : context.createTreeNode(0, length - 1, 0, false, null)
-    return this._makeView(context, root, writable, 0)
+    return this._makeView(context, root, writable, 0, timeout, wait)
   }
 
   move({ length = this.core.length, key = null, writable = this.writable } = {}) {
@@ -130,12 +138,12 @@ class Hyperbee extends EventEmitter {
     this._setRoot(this._nodeAtSeq(length - 1), true)
   }
 
-  snapshot() {
-    return this._makeView(this.context, this.root, false, 0)
+  snapshot({ timeout = this.config.timeout, wait = this.config.wait } = {}) {
+    return this._makeView(this.context, this.root, false, 0, timeout, wait)
   }
 
-  undo(n) {
-    return this._makeView(this.context, this.root, true, n)
+  undo(n, { timeout = this.config.timeout, wait = this.config.wait } = {}) {
+    return this._makeView(this.context, this.root, true, n, timeout, wait)
   }
 
   write(opts = {}) {
