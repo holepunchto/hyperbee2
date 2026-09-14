@@ -1,6 +1,6 @@
 {
   "name": "hyperbee2",
-  "version": "2.15.0",
+  "version": "2.16.0",
   "description": "P2P Append-Only Multi-fork Bε-Tree",
   "main": "index.js",
   "files": [
