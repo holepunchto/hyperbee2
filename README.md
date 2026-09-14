@@ -5,7 +5,7 @@ npm install hyperbee2
 ```
 
 A P2P append-only multifork Bε-tree build on top of [Hypercore][hypercore].
-This is the next major version for [hyperbee](https://github.com/holepunchto/hyperbee).
+This is the next generation of Hyperbee surpassing the original [hyperbee](https://github.com/holepunchto/hyperbee) in performance and features. Hyperbee2 adds a better batch API (see [WriteBatch](#writebatch)), delta compression and multiwriter capabilities. One key difference is that values in the tree can be pointers to other cores allowing for forking another tree.
 
 ## Usage
 
