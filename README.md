@@ -502,7 +502,7 @@ for await (const data of b.createReadStream(b)) {
 
 ### `await batch.lock()`
 
-Aquires an exclusive write lock now instead of waiting for `flush()`
+Acquires an exclusive write lock now instead of waiting for `flush()`
 to be called. No writes will occur until this batch is closed allowing
 you to keep a consistent view of the database while building the batch.
 
@@ -523,7 +523,7 @@ Queues an operation to clear all entries from the tree.
 
 #### `await batch.flush()`
 
-Aquires an exclusive write lock and applies the operations queued in this
+Acquires an exclusive write lock and applies the operations queued in this
 batch to the tree, clearing the queue.
 
 **Warning:** continuing to use the batch after flushing can cause unpredictable
