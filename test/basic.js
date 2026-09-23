@@ -649,7 +649,9 @@ test('reindex replays remote changes into the local core', async function (t) {
   const all = []
   for await (const data of a.createChangesStream()) all.push(data)
   t.is(all.length, 5)
-  for (const c of all) t.alike(c.head.key, a.core.key)
+  for (const c of all.slice(0, 2)) t.alike(c.head.key, a.core.key)
+  t.alike(all[1].tail, indexed)
+  for (const c of all.slice(2)) t.alike(c.head.key, b.core.key)
 
   t.alike(await entries(a), await entries(b))
 
@@ -734,8 +736,6 @@ test('reindex preserves batches across splits, value blocks and cores', async fu
   // b writes more, a only copies the new change and chains it onto its own tip
   await writeRound(4)
 
-  const localTip = a.head()
-
   a.move(b.head())
   t.is(
     await a.reindex((c) => b4a.equals(c.head.key, source.key) && c.head.length <= source.length),
@@ -747,7 +747,8 @@ test('reindex preserves batches across splits, value blocks and cores', async fu
 
   t.is(more.length, 6)
   t.alike(more[0].head, a.head())
-  t.alike(more[0].tail, localTip, 'new copy continues the local chain')
+  t.alike(more[0].tail, source, 'new copy links to the change until stopped at')
+  t.alike(more[1].head, source)
   t.is((await a.cores()).length, 3, 'now also references b')
 
   a.cache.empty()
