@@ -3,7 +3,7 @@ const b4a = require('b4a')
 const Corestore = require('corestore')
 const Bee = require('../')
 const { TYPE_LATEST, TYPE_COMPAT, decodeBlock } = require('../lib/encoding.js')
-const { create, replicate } = require('./helpers')
+const { create, createMultiple, replicate } = require('./helpers')
 
 const INFLIGHT_RANGE = [256, 512]
 
@@ -591,6 +591,225 @@ test('changes', async function (t) {
   t.alike(changes[3].head, { ...head, length })
   length -= changes[4].batch.length
   t.alike(changes[4].head, { ...head, length })
+})
+
+test('reindex replays remote changes into the local core', async function (t) {
+  const [a, b] = await createMultiple(t, 2)
+  await a.ready()
+  await b.ready()
+
+  const heads = []
+
+  for (let i = 0; i < 3; i++) {
+    const w = b.write()
+    w.tryPut(b4a.from('key' + i), b4a.from('val' + i))
+    if (i === 2) w.tryDelete(b4a.from('key0'))
+    await w.flush()
+    heads.push(b.head())
+  }
+
+  a.move({ key: b.core.key, length: b.head().length })
+  t.alike(a.head().key, b.core.key)
+
+  t.is(await a.reindex(() => false), 3)
+  t.alike(a.head().key, a.core.key)
+  t.is(a.head().length, a.core.length)
+
+  const changes = []
+  for await (const data of a.createChangesStream()) changes.push(data)
+
+  t.is(changes.length, 3)
+  for (const c of changes) t.alike(c.head.key, a.core.key)
+  t.is(changes[2].tail, null)
+
+  for (let i = 0; i < 3; i++) {
+    const local = await entries(a.checkout(changes[2 - i].head))
+    const remote = await entries(b.checkout(heads[i]))
+    t.alike(local, remote, 'version ' + i + ' matches')
+  }
+
+  const indexed = b.head()
+
+  for (let i = 3; i < 5; i++) {
+    const w = b.write()
+    w.tryPut(b4a.from('key' + i), b4a.from('val' + i))
+    w.tryPut(b4a.from('key1'), b4a.from('updated' + i))
+    await w.flush()
+  }
+
+  a.move({ key: b.core.key, length: b.head().length })
+
+  const n = await a.reindex(
+    (c) => b4a.equals(c.head.key, indexed.key) && c.head.length <= indexed.length
+  )
+
+  t.is(n, 2)
+  t.alike(a.head().key, a.core.key)
+
+  const all = []
+  for await (const data of a.createChangesStream()) all.push(data)
+  t.is(all.length, 5)
+  for (const c of all.slice(0, 2)) t.alike(c.head.key, a.core.key)
+  t.alike(all[1].tail, indexed)
+  for (const c of all.slice(2)) t.alike(c.head.key, b.core.key)
+
+  t.alike(await entries(a), await entries(b))
+
+  // nothing new to index
+  const localHead = a.head()
+  t.is(await a.reindex((c) => c.head.length <= localHead.length), 0)
+  t.alike(a.head(), localHead)
+
+  async function entries(db) {
+    const list = []
+    for await (const e of db.createReadStream()) {
+      list.push(b4a.toString(e.key) + '=' + b4a.toString(e.value))
+    }
+    if (db.view) await db.close()
+    return list
+  }
+})
+
+test('reindex preserves batches across splits, value blocks and cores', async function (t) {
+  const [a, b, c] = await createMultiple(t, 3, { t: 3 })
+  await a.ready()
+  await b.ready()
+  await c.ready()
+
+  // c seeds a tree, b builds on top of c's head so b's blocks point into c's core
+  {
+    const w = c.write()
+    for (let i = 0; i < 40; i++) w.tryPut(b4a.from('c' + pad(i)), b4a.from('c' + i))
+    await w.flush()
+  }
+
+  const genesis = c.head()
+
+  b.move(genesis)
+
+  for (let round = 0; round < 4; round++) await writeRound(round)
+
+  const remote = []
+  for await (const data of b.createChangesStream()) remote.push(data)
+  t.is(remote.length, 5)
+
+  const source = b.head()
+  t.absent(b4a.equals(source.key, b.core.key), 'b is viewing c, its writes live in its local core')
+
+  // stop at c's change, so the copies keep pointing into c's core for untouched nodes
+  a.move(source)
+  t.is(await a.reindex((change) => b4a.equals(change.head.key, genesis.key)), 4)
+
+  t.alike(a.head().key, a.core.key)
+  t.is(a.head().length, a.core.length)
+  t.is((await a.cores()).length, 2, 'local table references c but not b')
+
+  const copied = []
+  for await (const data of a.createChangesStream()) copied.push(data)
+
+  t.is(copied.length, 5)
+  t.alike(copied[3].tail, genesis, 'oldest copy links to the remote tail')
+  t.alike(copied[4].head, genesis)
+
+  for (let i = 0; i < 4; i++) {
+    const r = remote[i]
+    const l = copied[i]
+
+    t.alike(l.head.key, a.core.key)
+    t.alike(r.head.key, source.key)
+    t.is(l.batch.length, r.batch.length, 'change ' + i + ' has the same number of blocks')
+
+    for (let j = 0; j < r.batch.length; j++) {
+      t.alike(shape(l.batch[j]), shape(r.batch[j]), 'change ' + i + ' block ' + j + ' matches')
+    }
+  }
+
+  a.cache.empty()
+  t.alike(await entries(a), await entries(b))
+
+  for (let i = 0; i < 4; i++) {
+    const l = await entries(a.checkout(copied[i].head))
+    const r = await entries(b.checkout(remote[i].head))
+    t.alike(l, r, 'version ' + i + ' matches')
+  }
+
+  // b writes more, a only copies the new change and chains it onto its own tip
+  await writeRound(4)
+
+  a.move(b.head())
+  t.is(
+    await a.reindex((c) => b4a.equals(c.head.key, source.key) && c.head.length <= source.length),
+    1
+  )
+
+  const more = []
+  for await (const data of a.createChangesStream()) more.push(data)
+
+  t.is(more.length, 6)
+  t.alike(more[0].head, a.head())
+  t.alike(more[0].tail, source, 'new copy links to the change until stopped at')
+  t.alike(more[1].head, source)
+  t.is((await a.cores()).length, 3, 'now also references b')
+
+  a.cache.empty()
+  t.alike(await entries(a), await entries(b))
+
+  // a's own write continues the chain and reads through copied blocks
+  {
+    const w = a.write()
+    w.tryPut(b4a.from('a0'), b4a.from('a'))
+    w.tryDelete(b4a.from('b' + pad(7)))
+    await w.flush()
+  }
+
+  a.cache.empty()
+  t.alike((await a.get(b4a.from('a0'))).value, b4a.from('a'))
+  t.is(await a.get(b4a.from('b' + pad(7))), null)
+  t.alike((await a.get(b4a.from('b' + pad(14)))).value, b4a.alloc(3000, 14))
+  t.alike((await a.get(b4a.from('c' + pad(39)))).value, b4a.from('c39'))
+
+  async function writeRound(round) {
+    const w = b.write()
+    for (let i = 0; i < 15; i++) {
+      const n = round * 15 + i
+      const value = n % 7 === 0 ? b4a.alloc(3000, n) : b4a.from('b' + n)
+      w.tryPut(b4a.from('b' + pad(n)), value)
+    }
+    for (let i = 0; i < 3; i++) w.tryDelete(b4a.from('c' + pad(round * 8 + i)))
+    await w.flush()
+  }
+
+  function pad(n) {
+    return String(n).padStart(3, '0')
+  }
+
+  function shape(blk) {
+    return {
+      type: blk.type,
+      batch: blk.batch,
+      t: blk.t,
+      keys: blk.keys && blk.keys.map((k) => ({ key: k.key, value: k.value })),
+      values: blk.values,
+      tree:
+        blk.tree &&
+        blk.tree.map((n) => ({
+          keys: n.keys.map((d) => [d.type, d.index, d.pointer && d.pointer.offset]),
+          children: n.children.map((d) => [d.type, d.index, d.pointer && d.pointer.offset])
+        })),
+      cohorts:
+        blk.cohorts &&
+        blk.cohorts.map((co) => co.map((d) => [d.type, d.index, d.pointer && d.pointer.offset]))
+    }
+  }
+
+  async function entries(db) {
+    const list = []
+    for await (const e of db.createReadStream()) {
+      list.push(b4a.toString(e.key) + '=' + b4a.toString(e.value))
+    }
+    if (db.view) await db.close()
+    return list
+  }
 })
 
 test('parallel batch', async function (t) {
