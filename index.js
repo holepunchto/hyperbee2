@@ -6,6 +6,7 @@ const { DiffStream } = require('./lib/diff.js')
 const { ChangesStream } = require('./lib/changes.js')
 const NodeCache = require('./lib/cache.js')
 const WriteBatch = require('./lib/write.js')
+const copyChanges = require('./lib/copy.js')
 const CoreContext = require('./lib/context.js')
 const SessionConfig = require('./lib/session-config.js')
 const { inflate, inflateValue } = require('./lib/inflate.js')
@@ -221,6 +222,36 @@ class Hyperbee extends EventEmitter {
 
   createChangesStream(options) {
     return new ChangesStream(this, options)
+  }
+
+  async reindex(until, { timeout = this.config.timeout, wait = this.config.wait } = {}) {
+    if (!this.writable) throw new Error('Not writable')
+
+    const config = this.config.options({ timeout, wait })
+
+    const changes = []
+
+    for await (const data of new ChangesStream(this, { timeout, wait })) {
+      if (await until(data)) break
+      changes.push(data)
+    }
+
+    if (changes.length === 0) return 0
+
+    const local = this.context.getLocalContext()
+
+    await local.lock.lock()
+
+    try {
+      await copyChanges(this, changes, config)
+    } finally {
+      local.lock.unlock()
+    }
+
+    this.context = local
+    this._setRoot(this._lastNodeInCore(), true)
+
+    return changes.length
   }
 
   async peek(range = {}) {
