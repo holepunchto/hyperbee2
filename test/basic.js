@@ -608,10 +608,14 @@ test('reindex replays remote changes into the local core', async function (t) {
     heads.push(b.head())
   }
 
+  let appends = 0
+  a.core.on('append', () => appends++)
+
   a.move({ key: b.core.key, length: b.head().length })
   t.alike(a.head().key, b.core.key)
 
   t.is(await a.reindex(() => false), 3)
+  t.is(appends, 1, 'all changes land in a single append')
   t.alike(a.head().key, a.core.key)
   t.is(a.head().length, a.core.length)
 

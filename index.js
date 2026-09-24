@@ -224,14 +224,17 @@ class Hyperbee extends EventEmitter {
     return new ChangesStream(this, options)
   }
 
-  async reindex(until, { timeout = this.config.timeout, wait = this.config.wait } = {}) {
+  async reindex(
+    until,
+    { timeout = this.config.timeout, wait = this.config.wait, prefetch = 128 } = {}
+  ) {
     if (!this.writable) throw new Error('Not writable')
 
     const config = this.config.options({ timeout, wait })
 
     const changes = []
 
-    for await (const data of new ChangesStream(this, { timeout, wait })) {
+    for await (const data of new ChangesStream(this, { timeout, wait, prefetch })) {
       if (await until(data)) break
       changes.push(data)
     }
