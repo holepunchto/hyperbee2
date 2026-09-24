@@ -1475,3 +1475,65 @@ test('undo with timeout and wait options', async function (t) {
   await t.exception(noWait.get(b4a.from('a')), /BLOCK_NOT_AVAILABLE/)
   await noWait.close()
 })
+
+test('reindex maps values as they are copied', async function (t) {
+  const [a, b] = await createMultiple(t, 2)
+  await a.ready()
+  await b.ready()
+
+  const big = b4a.alloc(4096).fill('x')
+  const huge = b4a.alloc(3 * 4096).fill('y') // spans several value blocks
+  const heads = []
+
+  for (let i = 0; i < 3; i++) {
+    const w = b.write()
+    w.tryPut(b4a.from('inline' + i), b4a.from('val' + i))
+    w.tryPut(b4a.from('big' + i), big)
+    w.tryPut(b4a.from('huge' + i), huge)
+    w.tryPut(b4a.from('keep' + i), b4a.from('keep' + i))
+    await w.flush()
+    heads.push(b.head())
+  }
+
+  a.move(b.head())
+
+  const seen = []
+
+  const n = await a.reindex(() => false, {
+    map: (key, value, change) => {
+      seen.push([b4a.toString(key), value.byteLength, change.head.length])
+      const name = b4a.toString(key)
+      if (name.startsWith('inline')) return b4a.from('mapped' + name.slice(6))
+      if (name.startsWith('big')) return b4a.concat([b4a.from('mapped'), value])
+      if (name.startsWith('huge')) return b4a.concat([b4a.from('mapped'), value])
+      return null
+    }
+  })
+
+  t.is(n, 3)
+  t.is(seen.length, 12, 'every copied key is offered to map')
+  t.ok(
+    seen.some(([name, size]) => name === 'big0' && size === big.byteLength),
+    'pointed values are inflated for map'
+  )
+
+  a.cache.empty()
+
+  for (let i = 0; i < 3; i++) {
+    t.alike((await a.get(b4a.from('inline' + i))).value, b4a.from('mapped' + i))
+    t.alike((await a.get(b4a.from('big' + i))).value, b4a.concat([b4a.from('mapped'), big]))
+    t.alike((await a.get(b4a.from('huge' + i))).value, b4a.concat([b4a.from('mapped'), huge]))
+    t.alike((await a.get(b4a.from('keep' + i))).value, b4a.from('keep' + i))
+  }
+
+  const copied = []
+  for await (const { head } of a.createChangesStream()) copied.unshift(head)
+  t.is(copied.length, 3)
+
+  for (let i = 0; i < 3; i++) {
+    const c = a.checkout(copied[i])
+    t.alike((await c.get(b4a.from('inline' + i))).value, b4a.from('mapped' + i), 'version ' + i)
+    t.is(await c.get(b4a.from('inline' + (i + 1))), null)
+    await c.close()
+  }
+})

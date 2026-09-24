@@ -226,7 +226,7 @@ class Hyperbee extends EventEmitter {
 
   async reindex(
     until,
-    { timeout = this.config.timeout, wait = this.config.wait, prefetch = 128 } = {}
+    { timeout = this.config.timeout, wait = this.config.wait, prefetch = 128, map = null } = {}
   ) {
     if (!this.writable) throw new Error('Not writable')
 
@@ -246,7 +246,7 @@ class Hyperbee extends EventEmitter {
     await local.lock.lock()
 
     try {
-      await copyChanges(this, changes, config)
+      await copyChanges(this, changes, config, map)
     } finally {
       local.lock.unlock()
     }
