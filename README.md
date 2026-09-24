@@ -328,6 +328,8 @@ Options:
                          // Defaults to the value of the Hyperbee's timeout option.
   wait: true,            // Wait for Hypercore to download blocks
                          // Defaults to the value of the Hyperbee's wait option.
+  prefetch: 128,         // Download this many blocks below the current head in
+                         // the background while iterating. 0 disables it.
 }
 ```
 

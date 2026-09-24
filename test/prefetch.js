@@ -118,3 +118,39 @@ async function waitForSiblings(it) {
 
   return false
 }
+
+test('changes stream prefetches the blocks below the head', async function (t) {
+  const db2 = await createRemoteSkinnyTree(t)
+  const length = db2.core.length
+
+  const stream = db2.createChangesStream()
+  const { value: first } = await stream[Symbol.asyncIterator]().next()
+  t.is(first.head.length, length, 'got the latest change')
+
+  let downloaded = false
+  for (let i = 0; i < 100 && !downloaded; i++) {
+    downloaded = true
+    for (let j = 0; j < length; j++) {
+      if (!(await db2.core.has(j))) downloaded = false
+    }
+    if (!downloaded) await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+
+  t.ok(downloaded, 'earlier blocks were downloaded in the background')
+  stream.destroy()
+})
+
+test('changes stream prefetch can be disabled', async function (t) {
+  const db2 = await createRemoteSkinnyTree(t)
+  const length = db2.core.length
+
+  const stream = db2.createChangesStream({ prefetch: 0 })
+  const { value: first } = await stream[Symbol.asyncIterator]().next()
+  t.is(first.head.length, length, 'got the latest change')
+
+  await new Promise((resolve) => setTimeout(resolve, 50))
+
+  t.ok(await db2.core.has(length - 1), 'head block was fetched')
+  t.absent(await db2.core.has(0), 'first block was not fetched')
+  stream.destroy()
+})
