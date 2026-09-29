@@ -62,7 +62,7 @@ test('destroying one RangeStream does not cancel an unrelated RangeStream readin
   const aRequested = await waitFor(() => a.iterator.config.activeRequests.length > 0)
   const bRequested = await waitFor(() => b.iterator.config.activeRequests.length > 0)
   t.ok(aRequested, 'sanity: A issued its own request for root')
-  t.absent(bRequested, 'sanity: B didnt issue its own request for root')
+  t.ok(bRequested, 'sanity: B issued its own request for root')
 
   // They still read through the very same cached tree node - inflate() just
   // no longer makes B's fetch depend on A's in-flight promise to get there.
@@ -95,9 +95,11 @@ test('destroying one RangeStream does not cancel an unrelated RangeStream readin
 test('destroying a secondary stream while the original is still pending closes it promptly', async function (t) {
   const db2 = await createUnreachableReader(t)
 
-  // A issues the real (permanently hanging) request for the root block. B
-  // never issues its own request - it just rides along on A's in-flight
-  // inflate of the same shared root pointer.
+  // A and B both read the same (permanently unreachable) root node
+  // concurrently, and may share the same cached tree node/assembled result -
+  // but each must still hold its own cancellable request for the underlying
+  // block, so destroying one never leaves the other stuck waiting on a
+  // promise it has no way of cancelling.
   const a = db2.createReadStream()
   const b = db2.createReadStream()
 
@@ -112,15 +114,15 @@ test('destroying a secondary stream while the original is still pending closes i
   const aRequested = await waitFor(() => a.iterator.config.activeRequests.length > 0)
   const bRequested = await waitFor(() => b.iterator.config.activeRequests.length > 0)
   t.ok(aRequested, 'sanity: A issued its own request for root')
-  t.absent(bRequested, 'sanity: B is a pure secondary - no request of its own yet')
+  t.ok(bRequested, 'sanity: B issued its own request for root too, even though A got there first')
 
   t.is(a.iterator.root, b.iterator.root, 'A & B share the same root pointer')
 
   const bClosed = new Promise((resolve) => b.once('close', resolve))
 
-  // The consumer of `B` decides it no longer wants it, even though B never
-  // made its own request and A (the owner of the shared inflate) is still
-  // alive and still pending. B must still be able to close.
+  // The consumer of `B` decides it no longer wants it, even though A (which
+  // may be doing any shared assembly work) is still alive and pending. B
+  // must still be able to close using its own request.
   b.destroy()
 
   const closed = await Promise.race([
@@ -128,8 +130,8 @@ test('destroying a secondary stream while the original is still pending closes i
     new Promise((resolve) => setTimeout(() => resolve(false), 2000))
   ])
 
-  t.ok(closed, 'B closes promptly even though it never held its own request')
-  t.is(bErrors.length, 0, 'destroying a pure secondary B is a clean cancel for B itself')
+  t.ok(closed, 'B closes promptly using its own request')
+  t.is(bErrors.length, 0, 'destroying B is a clean cancel for B itself')
 
   a.destroy()
   await new Promise((resolve) => a.once('close', resolve))
