@@ -91,3 +91,46 @@ test('destroying one RangeStream does not cancel an unrelated RangeStream readin
   b.destroy()
   await new Promise((resolve) => b.once('close', resolve))
 })
+
+test('destroying a secondary stream while the original is still pending closes it promptly', async function (t) {
+  const db2 = await createUnreachableReader(t)
+
+  // A issues the real (permanently hanging) request for the root block. B
+  // never issues its own request - it just rides along on A's in-flight
+  // inflate of the same shared root pointer.
+  const a = db2.createReadStream()
+  const b = db2.createReadStream()
+
+  const aErrors = []
+  const bErrors = []
+  a.on('error', (err) => aErrors.push(err))
+  b.on('error', (err) => bErrors.push(err))
+
+  a.resume()
+  b.resume()
+
+  const aRequested = await waitFor(() => a.iterator.config.activeRequests.length > 0)
+  const bRequested = await waitFor(() => b.iterator.config.activeRequests.length > 0)
+  t.ok(aRequested, 'sanity: A issued its own request for root')
+  t.absent(bRequested, 'sanity: B is a pure secondary - no request of its own yet')
+
+  t.is(a.iterator.root, b.iterator.root, 'A & B share the same root pointer')
+
+  const bClosed = new Promise((resolve) => b.once('close', resolve))
+
+  // The consumer of `B` decides it no longer wants it, even though B never
+  // made its own request and A (the owner of the shared inflate) is still
+  // alive and still pending. B must still be able to close.
+  b.destroy()
+
+  const closed = await Promise.race([
+    bClosed.then(() => true),
+    new Promise((resolve) => setTimeout(() => resolve(false), 2000))
+  ])
+
+  t.ok(closed, 'B closes promptly even though it never held its own request')
+  t.is(bErrors.length, 0, 'destroying a pure secondary B is a clean cancel for B itself')
+
+  a.destroy()
+  await new Promise((resolve) => a.once('close', resolve))
+})
