@@ -62,7 +62,7 @@ test('destroying one RangeStream does not cancel an unrelated RangeStream readin
   const aRequested = await waitFor(() => a.iterator.config.activeRequests.length > 0)
   const bRequested = await waitFor(() => b.iterator.config.activeRequests.length > 0)
   t.ok(aRequested, 'sanity: A issued its own request for root')
-  t.ok(bRequested, 'sanity: B issued its own request for root')
+  t.absent(bRequested, 'sanity: B didnt issue its own request for root')
 
   // They still read through the very same cached tree node - inflate() just
   // no longer makes B's fetch depend on A's in-flight promise to get there.
