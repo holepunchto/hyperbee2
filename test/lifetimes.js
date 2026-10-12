@@ -301,16 +301,60 @@ test('add descendant during signalling', function (t) {
 test('fork of ended lifetime produces a new ended lifetime', function (t) {
   const calls = []
 
-  const a = new Lifetime();
-  a.wait(() => calls.push('a'));
-  a.end();
+  const a = new Lifetime()
+  a.wait(() => calls.push('a'))
+  a.end()
 
-  const b = a.fork().wait(() => calls.push('b'));
+  const b = a.fork().wait(() => calls.push('b'))
 
-  t.is(a.isActive(), false);
-  t.is(b.isActive(), false);
+  t.is(a.isActive(), false)
+  t.is(b.isActive(), false)
 
   // In this case 'b' is called after 'a' because it is only added after
   // 'a' has already ended.
   t.alike(calls, ['a', 'b'])
+})
+
+test('attaching ended lifetime to shared lifetime is no-op', function (t) {
+  const a = new Lifetime()
+  const b = new Lifetime()
+
+  const shared = new SharedLifetime(a)
+
+  b.end()
+  shared.attach(b)
+
+  t.is(shared.isActive(), true)
+  a.end()
+  t.is(shared.isActive(), false)
+})
+
+test('attaching ended lifetime to ended shared lifetime is no-op', function (t) {
+  const a = new Lifetime()
+  const b = new Lifetime()
+
+  const shared = new SharedLifetime(a)
+
+  a.end()
+  t.is(shared.isActive(), false)
+
+  b.end()
+  shared.attach(b)
+
+  t.is(shared.isActive(), false)
+})
+
+test('attaching live lifetime to ended shared lifetime is an error', function (t) {
+  t.plan(1)
+  const a = new Lifetime()
+  const b = new Lifetime()
+
+  const shared = new SharedLifetime(a)
+  a.end()
+
+  try {
+    shared.attach(b)
+  } catch {
+    t.ok(true)
+  }
 })
