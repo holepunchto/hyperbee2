@@ -297,3 +297,20 @@ test('add descendant during signalling', function (t) {
 
   t.alike(calls, [2, 1.5, 1, 0])
 })
+
+test('fork of ended lifetime produces a new ended lifetime', function (t) {
+  const calls = []
+
+  const a = new Lifetime();
+  a.wait(() => calls.push('a'));
+  a.end();
+
+  const b = a.fork().wait(() => calls.push('b'));
+
+  t.is(a.isActive(), false);
+  t.is(b.isActive(), false);
+
+  // In this case 'b' is called after 'a' because it is only added after
+  // 'a' has already ended.
+  t.alike(calls, ['a', 'b'])
+})
