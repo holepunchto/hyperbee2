@@ -154,3 +154,28 @@ test('timeout', function (t) {
     t.is(c.ended, true)
   }, 300)
 })
+
+test('unwait a lifetime during cleanup phase', function (t) {
+  const lifetime = new Lifetime()
+
+  let cb2_called = false;
+  let cb1_called = false;
+
+  const cb2 = () => {
+      cb2_called = true;
+  }
+  const cb1 = () => {
+      cb1_called = true;
+      // During cleanup, remove second callback
+      lifetime.unwait(cb2);
+  }
+  lifetime.wait(cb1);
+  lifetime.wait(cb2);
+
+  // Run cleanup
+  lifetime.end()
+
+  // Check second callback did not run
+  t.is(cb1_called, true);
+  t.is(cb2_called, false);
+})
