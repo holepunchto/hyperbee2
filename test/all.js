@@ -19,6 +19,7 @@ async function runTests() {
   await import('./prefetch.js')
   await import('./tree.js')
   await import('./undo.js')
+  await import('./lifetimes.js')
 
   test.resume()
 }

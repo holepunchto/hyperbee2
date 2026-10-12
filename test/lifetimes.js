@@ -1,5 +1,5 @@
 const test = require('brittle')
-const { Lifetime, SharedLifetime, SharedResource } = require('../lib/lifetimes.js')
+const { Lifetime, SharedLifetime, SharedResource, timeout } = require('../lib/lifetimes.js')
 
 test('ending parent lifetime ends child', function (t) {
   const a = new Lifetime()
@@ -128,4 +128,29 @@ test('shared resource', function (t) {
   // End second session and resource is destroyed
   session2.end()
   t.is(res.value.state, -1)
+})
+
+test('timeout', function (t) {
+  t.plan(6)
+  const a = new Lifetime()
+  const b = new Lifetime()
+  const c = new Lifetime()
+
+  timeout(a, 0)
+  const cancel = timeout(b, 200)
+  timeout(c, 200)
+
+  setTimeout(() => {
+    t.is(a.ended, true)
+    t.is(b.ended, false)
+    t.is(c.ended, false)
+    // clears timeout on b
+    cancel()
+  }, 100)
+
+  setTimeout(() => {
+    t.is(a.ended, true)
+    t.is(b.ended, false)
+    t.is(c.ended, true)
+  }, 300)
 })
