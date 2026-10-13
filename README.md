@@ -124,9 +124,22 @@ Read only. Boolean indicating whether the [Corestore][corestore] has opened.
 
 Read only. Boolean indicating whether the [Corestore][corestore] has closed.
 
-#### `db.replicate()`
+#### `db.replicate(optsOrStream)`
 
 Calls `replicate` on underlying [Corestore][corestore].
+
+See:
+
+* [Corestore docs](https://github.com/holepunchto/corestore#const-stream--storereplicateoptsorstream).
+* [Hypercore docs](https://github.com/holepunchto/hypercore#const-stream--corereplicateisinitiatororreplicationstream-opts--)
+
+Options:
+
+```js
+{
+  ondiscoverykey: () => {},  // A handler for when a discovery key is set over the stream for corestore management
+}
+```
 
 #### `db.checkout([options])`
 
