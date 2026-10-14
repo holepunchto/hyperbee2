@@ -117,7 +117,7 @@ test('download skips subtrees marked by an earlier download', async function (t)
   const length = db2.core.length
 
   await appendMore(db, entries)
-  await db2.core.update({ wait: true })
+  await sync(db, db2)
 
   const db3 = await reopen(t, db, db2)
   const seqs = traceInflate(db3)
@@ -143,7 +143,7 @@ test('download walks subtrees a ranged download did not cover', async function (
   const length = db2.core.length
 
   await appendMore(db, entries)
-  await db2.core.update({ wait: true })
+  await sync(db, db2)
 
   const db3 = await reopen(t, db, db2)
   const seqs = traceInflate(db3)
@@ -292,12 +292,20 @@ async function createRemoteTree(t) {
 
   const streams = await replicate(t, db, db2)
 
-  await db2.core.update({ wait: true })
+  await sync(db, db2)
   db2.update()
 
   db.downloadStreams = streams
 
   return { db, db2, entries, lengths }
+}
+
+// update resolves false if the peer has not announced its new length yet, so retry
+async function sync(db, db2) {
+  while (db2.core.length < db.core.length) {
+    if (await db2.core.update({ wait: true })) continue
+    await new Promise((resolve) => setImmediate(resolve))
+  }
 }
 
 async function disconnect(t, db, db2) {
