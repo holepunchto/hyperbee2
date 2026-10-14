@@ -269,7 +269,7 @@ class Hyperbee extends EventEmitter {
     const config = this.config.detach(range)
     const root = await this.bootstrap(config)
     if (!root) return
-    const d = new Downloader(this, root, range, config)
+    const d = new Downloader(this, root, config, range)
     await d.run()
   }
 
