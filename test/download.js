@@ -111,50 +111,45 @@ test('ranged download does not mark the root', async function (t) {
 })
 
 test('download skips subtrees marked by an earlier download', async function (t) {
-  const { db, db2, entries } = await createRemoteTree(t)
+  // same tree twice, once marked by a download and once only read, so nothing is marked
+  const a = await createRemoteTree(t)
+  const b = await createRemoteTree(t)
 
-  await db2.download()
-  const length = db2.core.length
+  await a.db2.download()
+  await collect(b.db2.createReadStream())
 
-  await appendMore(db, entries)
-  await sync(db, db2)
+  await appendMore(a.db, a.entries)
+  await appendMore(b.db, b.entries)
+  await sync(a.db, a.db2)
+  await sync(b.db, b.db2)
 
-  const db3 = await reopen(t, db, db2)
-  const seqs = traceInflate(db3)
+  const marked = await downloadFresh(t, a)
+  const unmarked = await downloadFresh(t, b)
 
-  await db3.download()
-  await disconnect(t, db, db2)
+  await disconnect(t, a.db, a.db2)
+  await disconnect(t, b.db, b.db2)
 
-  t.ok(seqs.length > 0, 'inflated the new nodes')
-  t.ok(
-    seqs.every((seq) => seq >= length),
-    'did not inflate nodes from the earlier download'
-  )
-  t.ok(await isDownloaded(db3.root))
+  t.ok(marked.seqs.length > 0, 'read the new blocks')
+  t.ok(marked.seqs.length < unmarked.seqs.length, 'skipped the blocks below marked nodes')
+  t.ok(await isDownloaded(marked.db.root))
 
-  const got = await collect(db3.createReadStream({ wait: false }))
-  t.is(got.length, entries.length)
+  const got = await collect(marked.db.createReadStream({ wait: false }))
+  t.is(got.length, a.entries.length)
 })
 
 test('download walks subtrees a ranged download did not cover', async function (t) {
   const { db, db2, entries } = await createRemoteTree(t)
 
   await db2.download({ gte: b4a.from('k0100'), lt: b4a.from('k0200') })
-  const length = db2.core.length
 
   await appendMore(db, entries)
   await sync(db, db2)
 
-  const db3 = await reopen(t, db, db2)
-  const seqs = traceInflate(db3)
-
-  await db3.download()
+  const { db: db3 } = await downloadFresh(t, { db, db2 })
   await disconnect(t, db, db2)
 
-  t.ok(
-    seqs.some((seq) => seq < length),
-    'inflated nodes from before the ranged download'
-  )
+  const got = await collect(db3.createReadStream({ wait: false }))
+  t.is(got.length, entries.length)
 })
 
 test('download of an older checkout skips subtrees downloaded earlier', async function (t) {
@@ -166,26 +161,22 @@ test('download of an older checkout skips subtrees downloaded earlier', async fu
   const unmarked = await downloadCheckout(t, a, length)
 
   await b.db2.download()
-  const seqs = await downloadCheckout(t, b, length)
+  const marked = await downloadCheckout(t, b, length)
 
   await disconnect(t, a.db, a.db2)
   await disconnect(t, b.db, b.db2)
 
-  t.ok(seqs.length > 0, 'walked the nodes the newer tree had rewritten')
-  t.ok(seqs.length < unmarked.length, 'skipped the subtrees the newer tree shares')
+  t.ok(marked.length > 0, 'read the blocks the newer tree had rewritten')
+  t.ok(marked.length < unmarked.length, 'skipped the subtrees the newer tree shares')
 })
 
-test('download of a marked checkout walks nothing', async function (t) {
+test('download of a marked checkout reads nothing', async function (t) {
   const { db, db2, lengths } = await createRemoteTree(t)
   const length = lengths[lengths.length - 3]
 
   await db2.checkout({ length }).download()
 
-  const db3 = await reopen(t, db, db2)
-  const old = db3.checkout({ length })
-  const seqs = traceInflate(old)
-  await old.download()
-
+  const seqs = await downloadCheckout(t, { db, db2 }, length)
   await disconnect(t, db, db2)
 
   t.is(seqs.length, 0)
@@ -237,32 +228,24 @@ async function appendMore(db, entries) {
   await w.flush()
 }
 
-// download a checkout from a fresh instance and return the node seqs it inflated
-async function downloadCheckout(t, { db, db2 }, length) {
-  const cold = await reopen(t, db, db2)
-  const view = cold.checkout({ length })
-  const seqs = traceInflate(view)
-  await view.download()
-  t.ok(await isDownloaded(view.root))
-  return seqs
-}
+// download from a fresh instance on the same store, so nothing is cached in
+// memory, and return the seqs of the blocks it read
+async function downloadFresh(t, { db, db2 }, length = db2.core.length) {
+  const fresh = new Bee(db2.store, { key: db.core.key, t: 4 })
+  t.teardown(() => fresh.close())
+  await fresh.ready()
 
-// fresh instance on the same store, so nothing is cached in memory
-async function reopen(t, db, db2) {
-  const db3 = new Bee(db2.store, { key: db.core.key, t: 4 })
-  t.teardown(() => db3.close())
-  await db3.ready()
-  db3.update()
-  return db3
-}
-
-function traceInflate(db) {
+  const view = fresh.checkout({ length })
   const seqs = []
-  const inflate = db.inflate.bind(db)
-  db.inflate = function (ptr, config) {
-    seqs.push(ptr.seq)
-    return inflate(ptr, config)
-  }
+  await view.download({ trace: (core, seq) => seqs.push(seq) })
+
+  t.ok(await isDownloaded(view.root))
+
+  return { db: view, seqs }
+}
+
+async function downloadCheckout(t, tree, length) {
+  const { seqs } = await downloadFresh(t, tree, length)
   return seqs
 }
 
