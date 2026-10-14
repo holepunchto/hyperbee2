@@ -11,6 +11,7 @@ async function runTests() {
   await import('./checkpoint.js')
   await import('./compat.js')
   await import('./diff.js')
+  await import('./download.js')
   await import('./fuzz.js')
   await import('./fuzz-bad-cache.js')
   await import('./fuzz-diff.js')

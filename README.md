@@ -380,8 +380,20 @@ The `range` argument accepts the same properties as the options for
 Fetches all entries in the given range. The promise resolves once
 all matching entries have been fetched.
 
-The `range` argument accepts the same properties as the options for
-[`createReadStream()`](#dbcreatereadstreamoptions).
+Rather than iterating the entries in order, the tree nodes in the range are
+walked with up to `parallelism` fetches in flight at a time, visiting the
+children of each node in random order so the requests spread over the tree.
+
+```js
+{
+  gte,          // Buffer: only download entries with keys >= this
+  gt,           // Buffer: only download entries with keys > this
+  lte,          // Buffer: only download entries with keys <= this
+  lt,           // Buffer: only download entries with keys < this
+  parallelism,  // Number: max concurrent fetches, defaults to 1024
+  timeout,      // Number: wait at most this many milliseconds (0 means no timeout)
+}
+```
 
 #### `await db.get(key, [options])`
 
