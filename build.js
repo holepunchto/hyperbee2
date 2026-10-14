@@ -343,4 +343,32 @@ bee.register({
   ]
 })
 
+bee.register({
+  name: 'local-key-type',
+  offset: 0,
+  enum: ['DOWNLOADED']
+})
+
+bee.register({
+  name: 'downloaded-key',
+  compact: true,
+  fields: [
+    {
+      name: 'type',
+      type: '@bee/local-key-type',
+      required: true
+    },
+    {
+      name: 'seq',
+      type: 'uint',
+      required: true
+    },
+    {
+      name: 'offset',
+      type: 'uint',
+      required: true
+    }
+  ]
+})
+
 Hyperschema.toDisk(schema)
