@@ -11,6 +11,7 @@ const CoreContext = require('./lib/context.js')
 const SessionConfig = require('./lib/session-config.js')
 const { inflate, inflateValue } = require('./lib/inflate.js')
 const { EMPTY, T } = require('./lib/tree.js')
+const { Lifetime } = require('./lib/lifetimes.js')
 
 class Hyperbee extends EventEmitter {
   constructor(store, opts = {}) {
@@ -40,7 +41,8 @@ class Hyperbee extends EventEmitter {
       writable = true,
       unbatch = 0,
       autoUpdate = !writable && !view,
-      preload = null
+      preload = null,
+      lifetime = new Lifetime()
     } = opts
 
     this.store = store
@@ -48,12 +50,18 @@ class Hyperbee extends EventEmitter {
     this.t = t
     this.context = context
     this.config = config.sub(activeRequests, timeout, wait, trace)
+    this.lifetime = lifetime
     this.view = view
     this.writable = writable
     this.unbatch = unbatch
 
     this.autoUpdate = autoUpdate
     this.preload = preload
+
+    // The root session for top-level Hyperbee methods, all other sessions
+    // are descendants of this and will be ended when this one ends
+    // (i.e. when Hyperbee.close() called)
+    this.session = new HyperbeeSession(this, lifetime)
 
     this.ready().catch(noop)
   }
@@ -106,8 +114,8 @@ class Hyperbee extends EventEmitter {
     return new Hyperbee(this.store, {
       t: this.t,
       config: this.config,
+      lifetime: this.lifetime,
       core: context.core,
-      activeRequests: [],
       timeout,
       wait,
       context,
@@ -147,14 +155,6 @@ class Hyperbee extends EventEmitter {
     return this._makeView(this.context, this.root, true, n, timeout, wait)
   }
 
-  write(opts = {}) {
-    if (!this.writable) throw new Error('Not writable')
-    if (!opts.key) {
-      opts.key = this.root ? this.head().key : null
-    }
-    return new WriteBatch(this, opts)
-  }
-
   update(root = null) {
     if (root === null) {
       if (this.context.lock.locked) return
@@ -188,47 +188,182 @@ class Hyperbee extends EventEmitter {
 
   async close() {
     if (!this.root) await this.ready()
-    Hypercore.destroyRequests(this.config.activeRequests, null)
+    // Stop in-flight requests
+    this.session.close()
     if (this.view) return
     if (this.store.closing) return this.store.close()
     await this.store.close()
     this.emit('close')
   }
 
+  bump(ptr) {
+    if (ptr.changed) return ptr.value
+    this.context.cache.bump(ptr)
+    this.context.cache.gc()
+    return ptr.value
+  }
+
+  _setRoot(root, emit) {
+    if (root === null || !root.equivalentTo(this.root)) {
+      this.root = root
+      if (emit) this.emit('update')
+    }
+    this.unbatch = 0
+  }
+
+  session() {
+    return this.session.fork()
+  }
+
+  write(...opts) {
+    return this.session.write(...opts)
+  }
+
+  createReadStream(...opts) {
+    return this.session.createReadStream(...opts)
+  }
+
+  createDiffStream(...opts) {
+    return this.session.createDiffStream(...opts)
+  }
+
+  createChangesStream(...opts) {
+    return this.session.createChangesStream(...opts)
+  }
+
+  peek(...opts) {
+    return this.session.peek(...opts)
+  }
+
+  download(...opts) {
+    return this.session.download(...opts)
+  }
+
+  get(...opts) {
+    return this.session.get(...opts)
+  }
+
+  // TODO: used by write batches but presumably it should not be part of public API
+  // outside this package?
+  inflate(...opts) {
+    return this.session.inflate(...opts)
+  }
+
+  reindex(...opts) {
+    return this.session.reindex(...opts)
+  }
+
+  cores(...opts) {
+    return this.session.cores(...opts)
+  }
+
+  compat(...opts) {
+    return this.session.compat(...opts)
+  }
+
+  bootstrap(...opts) {
+    return this.session.bootstrap(...opts)
+  }
+
+  asSession() {
+    return this.session
+  }
+}
+
+class HyperbeeSession {
+  constructor(bee, lifetime) {
+    this.bee = bee
+    this.config = bee.config.detach({})
+
+    // Fork from main hyperbee instance lifetime so if the underlying
+    // hyperbee is closed, this session's requests also get cancelled.
+    this.lifetime = lifetime.fork()
+    this.lifetime.wait(() => {
+      // When this session ends, cancel its hypercore requests.
+      Hypercore.destroyRequests(this.config.activeRequests, null)
+    })
+  }
+
+  async finalizeKeyPointer(key, config) {
+    const value = key.value || (await inflateValue(key, config))
+
+    return {
+      core: key.context.getCore(key.core),
+      offset: key.offset,
+      seq: key.seq,
+      key: key.key,
+      value
+    }
+  }
+
   async cores({ local = true, ...opts } = {}) {
     const config = this.config.options(opts)
-    await this.ready()
-    await this.context.update(config)
+    await this.bee.ready()
+    await this.bee.context.update(config)
 
     const cores = []
 
     // index 0 is the core this bee is viewing, the rest are referenced cores
-    for (let i = 0; i <= this.context.cores.length; i++) {
-      const key = this.context.getCoreKey(i)
-      if (!local && b4a.equals(key, this.context.local.key)) continue
+    for (let i = 0; i <= this.bee.context.cores.length; i++) {
+      const key = this.bee.context.getCoreKey(i)
+      if (!local && b4a.equals(key, this.bee.context.local.key)) continue
       cores.push(key)
     }
 
     return cores
   }
 
-  createReadStream(options) {
-    return new RangeStream(this, options)
+  async compat() {
+    await this.bee.ready()
+    return this.bee.context.getBlockType(0, this.config)
   }
 
-  createDiffStream(right, options) {
-    return new DiffStream(this, right, options)
+  async bootstrap(config) {
+    if (!this.bee.root) await this.bee.ready()
+    if (this.bee.unbatch) await this._rollback(config)
+    return this.bee.root === EMPTY ? null : this.bee.root
   }
 
-  createChangesStream(options) {
-    return new ChangesStream(this, options)
+  async _rollback(config) {
+    const expected = this.bee.unbatch
+
+    let n = expected
+    let length = this.bee.root === EMPTY ? 0 : this.bee.root.seq + 1
+    let context = this.bee.context
+
+    while (n > 0 && length > 0 && expected === this.bee.unbatch) {
+      const seq = length - 1
+      const blk = await context.getBlock(seq, 0, config, null)
+
+      if (!blk.previous) {
+        length = 0
+        break
+      }
+
+      context = await context.getContext(blk.previous.core, config, blk)
+      length = blk.previous.seq + 1
+      n--
+    }
+
+    if (expected === this.bee.unbatch) {
+      this.bee.context = context
+      this.bee._setRoot(this.bee._nodeAtSeq(length - 1), true)
+    }
+  }
+
+  write(opts = {}) {
+    if (!this.bee.writable) throw new Error('Not writable')
+    if (!opts.key) {
+      opts.key = this.bee.root ? this.bee.head().key : null
+    }
+    return new WriteBatch(this, opts)
   }
 
   async reindex(
     until,
     { timeout = this.config.timeout, wait = this.config.wait, prefetch = 128, map = null } = {}
   ) {
-    if (!this.writable) throw new Error('Not writable')
+    if (!this.bee.writable) throw new Error('Not writable')
 
     const config = this.config.options({ timeout, wait })
 
@@ -241,18 +376,18 @@ class Hyperbee extends EventEmitter {
 
     if (changes.length === 0) return 0
 
-    const local = this.context.getLocalContext()
+    const local = this.bee.context.getLocalContext()
 
     await local.lock.lock()
 
     try {
-      await copyChanges(this, changes, config, map)
+      await copyChanges(this.bee, changes, config, map)
     } finally {
       local.lock.unlock()
     }
 
-    this.context = local
-    this._setRoot(this._lastNodeInCore(), true)
+    this.bee.context = local
+    this.bee._setRoot(this.bee._lastNodeInCore(), true)
 
     return changes.length
   }
@@ -273,77 +408,24 @@ class Hyperbee extends EventEmitter {
     })
   }
 
-  bump(ptr) {
-    if (ptr.changed) return ptr.value
-    this.context.cache.bump(ptr)
-    this.context.cache.gc()
-    return ptr.value
+  createReadStream(options) {
+    return new RangeStream(this, options)
   }
 
-  async compat() {
-    await this.ready()
-    return this.context.getBlockType(0, this.config)
+  createDiffStream(right, options) {
+    return new DiffStream(this, right.asSession(), options)
+  }
+
+  createChangesStream(options) {
+    return new ChangesStream(this, options)
   }
 
   async inflate(ptr, config) {
     if (!ptr.value) {
-      await inflate(ptr, config)
+      await inflate(ptr, config, this)
     }
-    this.bump(ptr)
+    this.bee.bump(ptr)
     return ptr.value
-  }
-
-  async finalizeKeyPointer(key, config) {
-    const value = key.value || (await inflateValue(key, config))
-
-    return {
-      core: key.context.getCore(key.core),
-      offset: key.offset,
-      seq: key.seq,
-      key: key.key,
-      value
-    }
-  }
-
-  async bootstrap(config) {
-    if (!this.root) await this.ready()
-    if (this.unbatch) await this._rollback(config)
-    return this.root === EMPTY ? null : this.root
-  }
-
-  async _rollback(config) {
-    const expected = this.unbatch
-
-    let n = expected
-    let length = this.root === EMPTY ? 0 : this.root.seq + 1
-    let context = this.context
-
-    while (n > 0 && length > 0 && expected === this.unbatch) {
-      const seq = length - 1
-      const blk = await context.getBlock(seq, 0, config, null)
-
-      if (!blk.previous) {
-        length = 0
-        break
-      }
-
-      context = await context.getContext(blk.previous.core, config, blk)
-      length = blk.previous.seq + 1
-      n--
-    }
-
-    if (expected === this.unbatch) {
-      this.context = context
-      this._setRoot(this._nodeAtSeq(length - 1), true)
-    }
-  }
-
-  _setRoot(root, emit) {
-    if (root === null || !root.equivalentTo(this.root)) {
-      this.root = root
-      if (emit) this.emit('update')
-    }
-    this.unbatch = 0
   }
 
   async get(key, opts) {
@@ -353,7 +435,7 @@ class Hyperbee extends EventEmitter {
     if (!ptr) return null
 
     while (true) {
-      const v = ptr.value ? this.bump(ptr) : await this.inflate(ptr, config)
+      const v = ptr.value ? this.bee.bump(ptr) : await this.inflate(ptr, config)
 
       let s = 0
       let e = v.keys.length
@@ -376,6 +458,18 @@ class Hyperbee extends EventEmitter {
       const i = c < 0 ? e : s
       ptr = v.children.get(i)
     }
+  }
+
+  async close() {
+    await this.lifetime.end()
+  }
+
+  fork() {
+    return new HyperbeeSession(this.bee, this.lifetime)
+  }
+
+  asSession() {
+    return this
   }
 }
 

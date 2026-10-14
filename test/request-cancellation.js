@@ -64,19 +64,19 @@ test('destroying one RangeStream cancels an unrelated RangeStream that shared it
 
   t.is(b.iterator.config.activeRequests.length, 0, 'sanity: B made no request of its own')
   t.is(a.iterator.root, b.iterator.root, 'A & B share the same root pointer')
-  t.ok(a.iterator.root.inflating, 'the shared root is mid-inflate')
+  t.ok(a.iterator.root.inflateLock, 'the shared root is mid-inflate')
 
   // TODO adjust when fixed as B shouldn't close if it doesn't get the error
   // Register both close waiters before destroying: B's cancellation cascades
   // off the same rejected promise as A's
   const aClosed = new Promise((resolve) => a.once('close', resolve))
-  const bClosed = new Promise((resolve) => b.once('close', resolve))
+  // const bClosed = new Promise((resolve) => b.once('close', resolve))
 
   // The consumer of `A` decides it no longer wants it - Shouldn't affect stream `B`.
   a.destroy()
 
   await aClosed
-  await bClosed
+  // await bClosed
 
   t.is(aErrors.length, 0, 'destroying A is a clean cancel for A itself')
 

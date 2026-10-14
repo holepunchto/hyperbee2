@@ -1,5 +1,11 @@
 const test = require('brittle')
-const { Lifetime, SharedLifetime, SharedResource, timeout } = require('../lib/lifetimes.js')
+const {
+  Lifetime,
+  SharedLifetime,
+  SharedResource,
+  timeout,
+  withLifetime
+} = require('../lib/lifetimes.js')
 
 test('ending parent lifetime ends child', function (t) {
   const a = new Lifetime()
@@ -357,4 +363,43 @@ test('attaching live lifetime to ended shared lifetime is an error', function (t
   } catch {
     t.ok(true)
   }
+})
+
+test('wrapping async function with a lifetime - promise resolves first', function (t) {
+  t.plan(1)
+
+  const lifetime = new Lifetime()
+  const { promise, resolve } = Promise.withResolvers()
+
+  withLifetime(lifetime, () => promise).then((result) => {
+    t.is(result, 123)
+  })
+
+  resolve(123)
+})
+
+test('wrapping async function with a lifetime - promise rejects first', function (t) {
+  t.plan(1)
+
+  const lifetime = new Lifetime()
+  const { promise, reject } = Promise.withResolvers()
+
+  withLifetime(lifetime, () => promise).catch((err) => {
+    t.is(err, 'err')
+  })
+
+  reject('err')
+})
+
+test('wrapping async function with a lifetime - lifetime ends first', function (t) {
+  t.plan(1)
+
+  const lifetime = new Lifetime()
+  const { promise } = Promise.withResolvers()
+
+  withLifetime(lifetime, () => promise).catch((err) => {
+    t.is(err.message, 'Session ended')
+  })
+
+  lifetime.end()
 })

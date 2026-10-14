@@ -130,8 +130,8 @@ Calls `replicate` on underlying [Corestore][corestore].
 
 See:
 
-* [Corestore docs](https://github.com/holepunchto/corestore#const-stream--storereplicateoptsorstream).
-* [Hypercore docs](https://github.com/holepunchto/hypercore#const-stream--corereplicateisinitiatororreplicationstream-opts--)
+- [Corestore docs](https://github.com/holepunchto/corestore#const-stream--storereplicateoptsorstream).
+- [Hypercore docs](https://github.com/holepunchto/hypercore#const-stream--corereplicateisinitiatororreplicationstream-opts--)
 
 Options:
 
@@ -199,7 +199,66 @@ Options:
 }
 ```
 
-#### `db.write([options])`
+#### `db.session()`
+
+Returns a new `HyperbeeSession`. See documentation below.
+
+#### `db.on('ready', listener)`
+
+Emitted once the Hyperbee is ready for use.
+
+##### `db.on('update', listener)`
+
+Emitted in the following scenarios:
+
+- When a `WriteBatch` is flushed and its `autoUpdate` option is `true`
+  (the default).
+- When the underlying core is appended to (locally or remotely) and the
+  `Hyperbee`'s `autoUpdate` option is `true`.
+- After a `move()` call on the `Hyperbee`.
+- After a rollback completes because the `unbatch` option to the
+  `Hyperbee` constructor was greater than `0`.
+
+Warning: this event may be emitted multiple times for the same
+update if `autoUpdate` is set on the `Hyperbee` and on `WriteBatch`:
+
+```js
+const b = new Hyperbee(store, { autoUpdate: true })
+b.on('update', () => console.log('New update'))
+
+const w = b.write(/* autoUpdate is true by default */)
+w.tryPut(Buffer.from('key'), Buffer.from('value'))
+await w.flush()
+
+// The following will be printed:
+// New udpate
+// New udpate
+```
+
+##### `db.on('close', listener)`
+
+Emitted one the `close()` method completes.
+
+
+## Hyperbee Session
+
+These methods are also available on the `Hyperbee` class - where they use
+the root session for that Hyperbee.
+
+Each Hyperbee Session manages its own in-flight requests, pending locks,
+etc, and manages their cancellation on close.
+
+#### `session.fork()`
+
+Returns a new session that is a child of this one. If this session is closed, the child
+will also be closed.
+
+#### `session.close()`
+
+Ends the session and cancels any requests associated with it. Child sessions will also
+be closed.
+
+#### `session.write([options])`
 
 Returns a [WriteBatch](#writebatch) object through which the tree can be updated.
 
@@ -229,7 +288,7 @@ Errors:
 
 - If the tree is not writable this will throw an Error
 
-#### `db.createReadStream([options])`
+#### `session.createReadStream([options])`
 
 Returns a [streamx][streamx] Readable Stream. This is async iterable.
 
@@ -269,7 +328,7 @@ for await (const data of b.createReadStream()) {
 }
 ```
 
-#### `db.createDiffStream(right, [options])`
+#### `session.createDiffStream(right, [options])`
 
 Returns a [streamx][streamx] Readable Stream that provides
 synchronized iteration over two trees. This is async iterable.
@@ -325,7 +384,7 @@ C C
 undefined E
 ```
 
-#### `db.createChangesStream([options])`
+#### `session.createChangesStream([options])`
 
 Returns a [streamx][streamx] Readable Stream for iterating over all
 batches previously written to the tree. This is async iterable.
@@ -368,7 +427,7 @@ Iterating over the stream will yield:
 }
 ```
 
-#### `await db.peek([range])`
+#### `await session.peek([range])`
 
 Attempts to get the first entry within the given range.
 
@@ -388,7 +447,7 @@ the following properties on success:
 The `range` argument accepts the same properties as the options for
 [`createReadStream()`](#dbcreatereadstreamoptions).
 
-#### `await db.download([range])`
+#### `await session.download([range])`
 
 Fetches all entries in the given range. The promise resolves once
 all matching entries have been fetched.
@@ -396,7 +455,7 @@ all matching entries have been fetched.
 The `range` argument accepts the same properties as the options for
 [`createReadStream()`](#dbcreatereadstreamoptions).
 
-#### `await db.get(key, [options])`
+#### `await session.get(key, [options])`
 
 Attempt to find an entry by its key. `key` is a buffer.
 
@@ -421,42 +480,6 @@ Options:
   wait,     // Boolean: wait for Hypercore to download blocks
 }
 ```
-
-#### `b.on('ready', listener)`
-
-Emitted once the Hyperbee is ready for use.
-
-##### `b.on('update', listener)`
-
-Emitted in the following scenarios:
-
-- When a `WriteBatch` is flushed and its `autoUpdate` option is `true`
-  (the default).
-- When the underlying core is appended to (locally or remotely) and the
-  `Hyperbee`'s `autoUpdate` option is `true`.
-- After a `move()` call on the `Hyperbee`.
-- After a rollback completes because the `unbatch` option to the
-  `Hyperbee` constructor was greater than `0`.
-
-Warning: this event may be emitted multiple times for the same
-update if `autoUpdate` is set on the `Hyperbee` and on `WriteBatch`:
-
-```js
-const b = new Hyperbee(store, { autoUpdate: true })
-b.on('update', () => console.log('New update'))
-
-const w = b.write(/* autoUpdate is true by default */)
-w.tryPut(Buffer.from('key'), Buffer.from('value'))
-await w.flush()
-
-// The following will be printed:
-// New udpate
-// New udpate
-```
-
-##### `b.on('close', listener)`
-
-Emitted one the `close()` method completes.
 
 ### WriteBatch
 
