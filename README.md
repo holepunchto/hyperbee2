@@ -386,13 +386,12 @@ children of each node in random order so the requests spread over the tree.
 
 ```js
 {
-  ;(gte, // Buffer: only download entries with keys >= this
-    gt, // Buffer: only download entries with keys > this
-    lte, // Buffer: only download entries with keys <= this
-    lt, // Buffer: only download entries with keys < this
-    parallelism, // Number: max concurrent fetches, defaults to 1024
-    timeout, // Number: wait at most this many milliseconds (0 means no timeout)
-    wait) // Boolean: wait for Hypercore to download blocks
+  gte,          // Buffer: only download entries with keys >= this
+  gt,           // Buffer: only download entries with keys > this
+  lte,          // Buffer: only download entries with keys <= this
+  lt,           // Buffer: only download entries with keys < this
+  parallelism,  // Number: max concurrent fetches, defaults to 1024
+  timeout,      // Number: wait at most this many milliseconds (0 means no timeout)
 }
 ```
 
