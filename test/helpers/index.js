@@ -23,6 +23,8 @@ async function replicate(t, a, b) {
     await closed1
     await closed2
   })
+
+  return { s1, s2 }
 }
 
 async function create(t, opts) {
