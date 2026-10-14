@@ -9,7 +9,7 @@ const WriteBatch = require('./lib/write.js')
 const copyChanges = require('./lib/copy.js')
 const CoreContext = require('./lib/context.js')
 const SessionConfig = require('./lib/session-config.js')
-const download = require('./lib/download.js')
+const Downloader = require('./lib/download.js')
 const { inflate, inflateValue } = require('./lib/inflate.js')
 const { EMPTY, T } = require('./lib/tree.js')
 
@@ -269,7 +269,8 @@ class Hyperbee extends EventEmitter {
     const config = this.config.detach(range)
     const root = await this.bootstrap(config)
     if (!root) return
-    await download(this, root, range, config)
+    const d = new Downloader(this, root, range, config)
+    await d.run()
   }
 
   bump(ptr) {
