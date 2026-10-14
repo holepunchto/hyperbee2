@@ -508,6 +508,49 @@ const encoding14 = {
   }
 }
 
+const encoding15_enum = {
+  DOWNLOADED: 0
+}
+
+// @bee/local-key-type enum
+const encoding15 = {
+  preencode(state, m) {
+    state.end++ // max enum is 0 so always one byte
+  },
+  encode(state, m) {
+    if (m > 0) throw new Error('Unknown enum')
+    c.uint.encode(state, m)
+  },
+  decode(state) {
+    return c.uint.decode(state)
+  }
+}
+
+// @bee/downloaded-key
+const encoding16 = {
+  preencode(state, m) {
+    encoding15.preencode(state, m.type)
+    c.uint.preencode(state, m.seq)
+    c.uint.preencode(state, m.offset)
+  },
+  encode(state, m) {
+    encoding15.encode(state, m.type)
+    c.uint.encode(state, m.seq)
+    c.uint.encode(state, m.offset)
+  },
+  decode(state) {
+    const r0 = encoding15.decode(state)
+    const r1 = c.uint.decode(state)
+    const r2 = c.uint.decode(state)
+
+    return {
+      type: r0,
+      seq: r1,
+      offset: r2
+    }
+  }
+}
+
 function setVersion(v) {
   version = v
 }
@@ -524,6 +567,8 @@ function decode(name, buffer, v = VERSION) {
 
 function getEnum(name) {
   switch (name) {
+    case '@bee/local-key-type':
+      return encoding15_enum
     default:
       throw new Error('Enum not found ' + name)
   }
@@ -561,6 +606,10 @@ function getEncoding(name) {
       return encoding13
     case '@bee/block-1':
       return encoding14
+    case '@bee/local-key-type':
+      return encoding15
+    case '@bee/downloaded-key':
+      return encoding16
     default:
       throw new Error('Encoder not found ' + name)
   }

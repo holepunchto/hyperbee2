@@ -384,6 +384,11 @@ Rather than iterating the entries in order, the tree nodes in the range are
 walked with up to `parallelism` fetches in flight at a time, visiting the
 children of each node in random order so the requests spread over the tree.
 
+Once the subtree below a tree node has been fetched completely, a marker for
+that node is written to the local storage of the core that holds it. Later
+downloads skip marked subtrees, whichever root they start from, since tree
+nodes are immutable. Subtrees cut off by the range are walked but not marked.
+
 ```js
 {
   gte,          // Buffer: only download entries with keys >= this

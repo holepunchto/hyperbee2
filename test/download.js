@@ -1,5 +1,8 @@
 const test = require('brittle')
 const b4a = require('b4a')
+const c = require('compact-encoding')
+const Bee = require('../')
+const { getEncoding, getEnum } = require('../spec/hyperschema')
 const { create, replicate } = require('./helpers')
 
 test('download fetches the whole tree', async function (t) {
@@ -89,6 +92,163 @@ test('download rejects when blocks are not available', async function (t) {
   }
 })
 
+test('full download marks the root', async function (t) {
+  const { db, db2 } = await createRemoteTree(t)
+
+  await db2.download()
+  await disconnect(t, db, db2)
+
+  t.ok(await isDownloaded(db2.root))
+})
+
+test('ranged download does not mark the root', async function (t) {
+  const { db, db2 } = await createRemoteTree(t)
+
+  await db2.download({ gte: b4a.from('k0100'), lt: b4a.from('k0200') })
+  await disconnect(t, db, db2)
+
+  t.is(await isDownloaded(db2.root), false)
+})
+
+test('download skips subtrees marked by an earlier download', async function (t) {
+  // same tree twice, once marked by a download and once only read, so nothing is marked
+  const a = await createRemoteTree(t)
+  const b = await createRemoteTree(t)
+
+  await a.db2.download()
+  await collect(b.db2.createReadStream())
+
+  await appendMore(a.db, a.entries)
+  await appendMore(b.db, b.entries)
+  await sync(a.db, a.db2)
+  await sync(b.db, b.db2)
+
+  const marked = await downloadFresh(t, a)
+  const unmarked = await downloadFresh(t, b)
+
+  await disconnect(t, a.db, a.db2)
+  await disconnect(t, b.db, b.db2)
+
+  t.ok(marked.seqs.length > 0, 'read the new blocks')
+  t.ok(marked.seqs.length < unmarked.seqs.length, 'skipped the blocks below marked nodes')
+  t.ok(await isDownloaded(marked.db.root))
+
+  const got = await collect(marked.db.createReadStream({ wait: false }))
+  t.is(got.length, a.entries.length)
+})
+
+test('download walks subtrees a ranged download did not cover', async function (t) {
+  const { db, db2, entries } = await createRemoteTree(t)
+
+  await db2.download({ gte: b4a.from('k0100'), lt: b4a.from('k0200') })
+
+  await appendMore(db, entries)
+  await sync(db, db2)
+
+  const { db: db3 } = await downloadFresh(t, { db, db2 })
+  await disconnect(t, db, db2)
+
+  const got = await collect(db3.createReadStream({ wait: false }))
+  t.is(got.length, entries.length)
+})
+
+test('download of an older checkout skips subtrees downloaded earlier', async function (t) {
+  // same tree twice, once without and once with a full download first
+  const a = await createRemoteTree(t)
+  const b = await createRemoteTree(t)
+  const length = a.lengths[a.lengths.length - 3]
+
+  const unmarked = await downloadCheckout(t, a, length)
+
+  await b.db2.download()
+  const marked = await downloadCheckout(t, b, length)
+
+  await disconnect(t, a.db, a.db2)
+  await disconnect(t, b.db, b.db2)
+
+  t.ok(marked.length > 0, 'read the blocks the newer tree had rewritten')
+  t.ok(marked.length < unmarked.length, 'skipped the subtrees the newer tree shares')
+})
+
+test('download of a marked checkout reads nothing', async function (t) {
+  const { db, db2, lengths } = await createRemoteTree(t)
+  const length = lengths[lengths.length - 3]
+
+  await db2.checkout({ length }).download()
+
+  const seqs = await downloadCheckout(t, { db, db2 }, length)
+  await disconnect(t, db, db2)
+
+  t.is(seqs.length, 0)
+})
+
+test('markers from a failed download are kept', async function (t) {
+  const { db, db2, entries } = await createRemoteTree(t)
+
+  await db2.download({ gte: b4a.from('k0100'), lt: b4a.from('k0200') })
+  await disconnect(t, db, db2)
+
+  try {
+    await db2.download({ wait: false })
+    t.fail('should have failed')
+  } catch (err) {
+    t.is(err.code, 'BLOCK_NOT_AVAILABLE')
+  }
+
+  const got = await collect(
+    db2.createReadStream({ gte: b4a.from('k0100'), lt: b4a.from('k0200'), wait: false })
+  )
+  t.is(got.length, entries.filter((e) => e.key >= 'k0100' && e.key < 'k0200').length)
+})
+
+async function isDownloaded(ptr) {
+  const core = ptr.context.getCore(ptr.core)
+  await core.ready()
+
+  const key = c.encode(getEncoding('@bee/downloaded-key'), {
+    type: getEnum('@bee/local-key-type').DOWNLOADED,
+    seq: ptr.seq,
+    offset: ptr.offset
+  })
+
+  const rx = core.core.state.storage.read()
+  const p = rx.getLocal(key)
+  rx.tryFlush()
+  return (await p) !== null
+}
+
+async function appendMore(db, entries) {
+  const w = db.write()
+  for (let i = 0; i < 25; i++) {
+    const key = b4a.from('k' + String(entries.length).padStart(4, '0'))
+    const value = b4a.alloc(16, entries.length & 0xff)
+    entries.push({ key, value })
+    w.tryPut(key, value)
+  }
+  await w.flush()
+}
+
+// download from a fresh instance on the same store, so nothing is cached in
+// memory, and return the seqs of the blocks it read
+async function downloadFresh(t, { db, db2 }, length = db2.core.length) {
+  const fresh = new Bee(db2.store, { key: db.core.key, t: 4 })
+  t.teardown(() => fresh.close())
+  await fresh.ready()
+
+  const view = fresh.checkout({ length })
+  const seqs = []
+  await view.download({ trace: (core, seq) => seqs.push(seq) })
+
+  t.ok(await isDownloaded(view.root))
+
+  return { db: view, seqs }
+}
+
+async function downloadCheckout(t, tree, length) {
+  const { seqs } = await downloadFresh(t, tree, length)
+  return seqs
+}
+
 async function createRemoteTree(t) {
   const db = await create(t, { t: 4 })
   await db.ready()
@@ -101,10 +261,13 @@ async function createRemoteTree(t) {
     entries.push({ key, value })
   }
 
+  const lengths = []
+
   for (let i = 0; i < entries.length; i += 25) {
     const w = db.write()
     for (let j = i; j < i + 25; j++) w.tryPut(entries[j].key, entries[j].value)
     await w.flush()
+    lengths.push(db.core.length)
   }
 
   const db2 = await create(t, { key: db.core.key, t: 4 })
@@ -112,12 +275,20 @@ async function createRemoteTree(t) {
 
   const streams = await replicate(t, db, db2)
 
-  await db2.core.update({ wait: true })
+  await sync(db, db2)
   db2.update()
 
   db.downloadStreams = streams
 
-  return { db, db2, entries }
+  return { db, db2, entries, lengths }
+}
+
+// update resolves false if the peer has not announced its new length yet, so retry
+async function sync(db, db2) {
+  while (db2.core.length < db.core.length) {
+    if (await db2.core.update({ wait: true })) continue
+    await new Promise((resolve) => setImmediate(resolve))
+  }
 }
 
 async function disconnect(t, db, db2) {

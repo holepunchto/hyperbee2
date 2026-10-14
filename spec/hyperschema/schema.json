@@ -406,6 +406,44 @@
           "version": 1
         }
       ]
+    },
+    {
+      "name": "local-key-type",
+      "namespace": "bee",
+      "offset": 0,
+      "enum": [
+        {
+          "key": "DOWNLOADED",
+          "version": 1
+        }
+      ],
+      "strings": false
+    },
+    {
+      "name": "downloaded-key",
+      "namespace": "bee",
+      "compact": true,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "type",
+          "required": true,
+          "type": "@bee/local-key-type",
+          "version": 1
+        },
+        {
+          "name": "seq",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "offset",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        }
+      ]
     }
   ]
 }
