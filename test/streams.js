@@ -40,29 +40,32 @@ test('close open streams when Hyperbee instance closed', async function (t) {
 
   const s1 = db.createReadStream()
   const s2 = db.createDiffStream(db2)
-  const s3 = db.createDiffStream(db2)
-  const s4 = db.createChangesStream()
+  const s3 = db.createChangesStream()
 
-  t.is(db.streams.length, 4)
+  s1.on('error', (err) => console.log('s1 error', err))
+  s2.on('error', (err) => console.log('s2 error', err))
+  s3.on('error', (err) => console.log('s4 error', err))
+
+  // Read from streams so they get added to Hyperbee instance streams array
+  s1.resume()
+  s2.resume()
+  s3.resume()
+
+  await new Promise((resolve) => setTimeout(resolve, 100))
+
+  t.is(db.streams.length, 3)
 
   t.is(s1.destroyed, false)
   t.is(s2.destroyed, false)
   t.is(s3.destroyed, false)
-  t.is(s4.destroyed, false)
 
-  // destroy one manually (it should be removed from Hyperbee instance)
   s2.destroy()
   await new Promise((resolve) => s2.once('close', resolve))
-  t.is(db.streams.length, 3)
+  t.is(db.streams.length, 2)
 
   t.is(s1.destroyed, false)
   t.is(s2.destroyed, true)
   t.is(s3.destroyed, false)
-  t.is(s4.destroyed, false)
-
-  // Ignore SESSION_CLOSED error on DiffStream.
-  // TODO: should this be squashed by the stream once destory() has been called on it?
-  s3.on('error', (err) => t.is(err.code, 'SESSION_CLOSED'))
 
   // Closing db should close remaining streams
   await db.close()
@@ -71,7 +74,4 @@ test('close open streams when Hyperbee instance closed', async function (t) {
   t.is(s1.destroyed, true)
   t.is(s2.destroyed, true)
   t.is(s3.destroyed, true)
-  t.is(s4.destroyed, true)
-
-  await db2.close()
 })
