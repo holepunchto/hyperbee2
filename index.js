@@ -52,6 +52,7 @@ class Hyperbee extends EventEmitter {
     this.view = view
     this.writable = writable
     this.unbatch = unbatch
+    this.streams = []
 
     this.autoUpdate = autoUpdate
     this.preload = preload
@@ -187,9 +188,26 @@ class Hyperbee extends EventEmitter {
     this.emit('ready')
   }
 
+  addStream(s) {
+    s.index = this.streams.push(s) - 1
+  }
+
+  removeStream(s) {
+    if (this.streams[s.index] !== s) {
+      throw Error('Stream not in expected position')
+    }
+    const last = this.streams.pop()
+    if (last === s) return
+    this.streams[s.index] = last
+    last.index = s.index
+  }
+
   async close() {
     if (!this.root) await this.ready()
     Hypercore.destroyRequests(this.config.activeRequests, null)
+    for (const s of this.streams) {
+      s.destroy()
+    }
     if (this.view) return
     if (this.store.closing) return this.store.close()
     await this.store.close()
