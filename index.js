@@ -193,6 +193,12 @@ class Hyperbee extends EventEmitter {
   }
 
   removeStream(s) {
+    if (s.index === -1) {
+      // Stream was never added to streams array.
+      // Protects against streamx calling _destory() hook without first
+      // calling _open() (because no read was ever performed on the stream).
+      return
+    }
     if (this.streams[s.index] !== s) {
       throw Error('Stream not in expected position')
     }
