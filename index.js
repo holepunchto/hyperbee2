@@ -189,24 +189,35 @@ class Hyperbee extends EventEmitter {
     return this._remapping
   }
 
+  // a move during the remap starts it over for the new context
   async _remap() {
-    const previous = this.context
-    const mapped = await previous.mappings.map(previous.core.key)
+    let handled = null
 
-    if (!b4a.equals(mapped, previous.core.key)) {
-      this.context = previous.getContextUnmapped(mapped)
-      await this.context.core.ready()
+    while (this.context !== handled) {
+      const context = this.context
+      const mapped = await context.mappings.map(context.core.key)
+      if (this.context !== context) continue
 
-      const root = this.root
-      if (root !== null && root !== EMPTY && root.context === previous && root.core === 0) {
-        this.root = this.context.createTreeNode(0, root.seq, 0, false, null)
+      if (!b4a.equals(mapped, context.core.key)) {
+        const next = context.getContextUnmapped(mapped)
+        await next.core.ready()
+        if (this.context !== context) continue
+
+        this.context = next
+
+        const root = this.root
+        if (root !== null && root !== EMPTY && root.context === context && root.core === 0) {
+          this.root = next.createTreeNode(0, root.seq, 0, false, null)
+        }
       }
-    }
 
-    try {
-      await this.context.update(this.config.options({ wait: false }))
-    } catch (err) {
-      if (err.code !== 'BLOCK_NOT_AVAILABLE') throw err
+      handled = this.context
+
+      try {
+        await handled.update(this.config.options({ wait: false }))
+      } catch (err) {
+        if (err.code !== 'BLOCK_NOT_AVAILABLE') throw err
+      }
     }
   }
 
