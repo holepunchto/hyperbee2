@@ -406,7 +406,7 @@ test('mapCore - a read in flight survives its core being remapped', async functi
   t.alike(stale.key, a.core.key, 'the read opened the core as referenced')
 
   reader.context.mappings.add([{ from: a.core.key, to: copy.key }])
-  const hc = await reader.context.getCore(1)
+  const hc = reader.context.getCore(1)
   t.alike(hc.key, copy.key, 'the next open resolves to the mapped core')
   t.absent(stale.closing, 'the superseded session is left to the reads holding it')
 
@@ -469,6 +469,31 @@ test('mapCore - a second move while the first is still being remapped wins', asy
   t.alike((await w.get(key(100))).value, value(100), 'and reads its data')
   t.is(await w.get(key(0)), null, 'not the data of the first move')
 
+  await w.close()
+})
+
+test('mapCore - a write onto a key given by the caller resolves it', async function (t) {
+  const store = new Corestore(await t.tmp())
+  t.teardown(() => store.close())
+
+  const a = await source(store, 50)
+  const copy = await copyCore(store, a.core, 'copy')
+  await a.core.clear(0, a.core.length)
+
+  const mapCore = (k) => (b4a.equals(k, a.core.key) ? copy.key : null)
+
+  const w = new Bee(store.namespace('w'), { mapCore })
+  await w.ready()
+
+  const batch = w.write({ key: a.core.key, length: a.core.length })
+  batch.tryPut(key(50), value(50))
+  await batch.flush()
+
+  await readAll(w, 51, t, 'the batch built on the mapped core')
+  t.absent(
+    (await w.cores()).some((k) => b4a.equals(k, a.core.key)),
+    'the key as given is not among the cores read'
+  )
   await w.close()
 })
 

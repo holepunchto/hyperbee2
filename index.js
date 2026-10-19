@@ -132,13 +132,13 @@ class Hyperbee extends EventEmitter {
     timeout = this.config.timeout,
     wait = this.config.wait
   } = {}) {
-    const context = key ? this.context.getContextUnmapped(key) : this.context
+    const context = key ? this.context.getContextByKey(key) : this.context
     const root = length === 0 ? EMPTY : context.createTreeNode(0, length - 1, 0, false, null)
     return this._makeView(context, root, writable, 0, timeout, wait)
   }
 
   move({ length = this.core.length, key = null, writable = this.writable } = {}) {
-    this.context = key ? this.context.getContextUnmapped(key) : this.context
+    this.context = key ? this.context.getContextByKey(key) : this.context
     this.writable = writable
 
     this._setRoot(this._nodeAtSeq(length - 1), true)
@@ -199,7 +199,7 @@ class Hyperbee extends EventEmitter {
       if (this.context !== context) continue
 
       if (!b4a.equals(mapped, context.core.key)) {
-        const next = context.getContextUnmapped(mapped)
+        const next = context.getContextByKey(mapped)
         await next.core.ready()
         if (this.context !== context) continue
 
@@ -258,7 +258,7 @@ class Hyperbee extends EventEmitter {
 
     // index 0 is the core this bee is viewing, the rest are referenced cores
     for (let i = 0; i <= this.context.cores.length; i++) {
-      const key = await this.context.getCoreKey(i)
+      const key = this.context.getCoreKey(i)
       const hex = b4a.toString(key, 'hex')
       if (seen.has(hex)) continue
       seen.add(hex)
@@ -353,7 +353,7 @@ class Hyperbee extends EventEmitter {
     const value = key.value || (await inflateValue(key, config))
 
     return {
-      core: await key.context.getCore(key.core),
+      core: key.context.getCore(key.core),
       offset: key.offset,
       seq: key.seq,
       key: key.key,
