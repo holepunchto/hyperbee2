@@ -66,10 +66,10 @@ Options include:
 }
 ```
 
-`mapCore` is asked once per core the tree references (and the core the tree
-is opened on). A non-null answer redirects every read of that core to the
-mapped core. Mappings are persisted next to the core table on the next write,
-so readers that open the tree later resolve them without the hook.
+`mapCore` is asked once per core the tree opens, the one it is opened on
+included. A non-null answer opens the mapped core in its place. Mappings are
+persisted next to the core table on the next write, so readers that open the
+tree later resolve them without the hook.
 
 If you pass your own `core`, consider increasing the inflight range on it (`256` minimum recommended, e.g. `{ inflightRange: [256, 512] }` when creating the core via Corestore) to match `hyperbee2` constructed cores.
 
@@ -165,14 +165,7 @@ Options:
 }
 ```
 
-If `key` is mapped by `mapCore` the tree is moved onto the mapped core before
-the next operation, see `db.remap()`.
-
-#### `await db.remap()`
-
-Resolves the mapping of the core the tree is open on and moves the tree onto
-it. Called by `ready()`, `move()` and `checkout()`, and awaited by every
-operation, so it only needs calling to observe `db.core` right after a move.
+If `key` is mapped by `mapCore` the core is opened as the core it maps to.
 
 #### `db.snapshot([options])`
 

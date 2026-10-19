@@ -68,7 +68,7 @@ test('mapCore - the references of a writer resolve to the mapped core', async fu
   const w = new Bee(store.namespace('w'), { mapCore })
   await w.ready()
   w.move({ key: a.core.key, length: a.core.length })
-  await w.remap()
+  await w.core.ready()
   t.alike(w.core.key, copy.key, 'moving onto the original lands on the mapping')
 
   const batch = w.write()
@@ -463,7 +463,7 @@ test('mapCore - a second move while the first is still being remapped wins', asy
   for (let i = 0; i < 10 && releaseA === null; i++) await immediate()
   releaseA()
 
-  await w.remap()
+  await w.core.ready()
   t.alike(w.core.key, copyB.key, 'the bee sits on the mapping of the last move')
   t.alike(w.head(), { length: b.core.length, key: copyB.key }, 'with the head of the last move')
   t.alike((await w.get(key(100))).value, value(100), 'and reads its data')
