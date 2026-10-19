@@ -1335,7 +1335,7 @@ test('inflight range - secondary core opened via context.getCore()', async funct
   const value = await db2.get(b4a.from('a'))
   t.alike(value.value, b4a.from('1'))
 
-  const hc = db2.context.getCore(1)
+  const hc = await db2.context.getCore(1)
   t.alike(hc.replicator.inflightRange, INFLIGHT_RANGE)
 })
 
@@ -1356,7 +1356,7 @@ test('inflight range - secondary core opened via context.getContextByKey()', asy
   w.tryPut(b4a.from('b'), b4a.from('2'))
   await w.flush()
 
-  const ctx = db2.context.getContextByKey(db1.core.key)
+  const ctx = await db2.context.getContextByKey(db1.core.key)
   t.alike(ctx.core.replicator.inflightRange, INFLIGHT_RANGE)
 })
 

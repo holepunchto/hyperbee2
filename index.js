@@ -8,6 +8,7 @@ const NodeCache = require('./lib/cache.js')
 const WriteBatch = require('./lib/write.js')
 const copyChanges = require('./lib/copy.js')
 const CoreContext = require('./lib/context.js')
+const Mappings = require('./lib/mappings.js')
 const SessionConfig = require('./lib/session-config.js')
 const Downloader = require('./lib/download.js')
 const { inflate, inflateValue } = require('./lib/inflate.js')
@@ -28,13 +29,15 @@ class Hyperbee extends EventEmitter {
       timeout = config.timeout,
       wait = config.wait,
       trace = config.trace,
+      mapCore = null,
       core = getRootCore(store, key, getEncryptionProvider),
       context = new CoreContext(
         store,
         core,
         new NodeCache(maxCacheSize),
         core,
-        getEncryptionProvider
+        getEncryptionProvider,
+        new Mappings(mapCore)
       ),
       root = null,
       view = false,
@@ -55,6 +58,7 @@ class Hyperbee extends EventEmitter {
 
     this.autoUpdate = autoUpdate
     this.preload = preload
+    this._remapping = null
 
     this.ready().catch(noop)
   }
@@ -128,16 +132,17 @@ class Hyperbee extends EventEmitter {
     timeout = this.config.timeout,
     wait = this.config.wait
   } = {}) {
-    const context = key ? this.context.getContextByKey(key) : this.context
+    const context = key ? this.context.getContextUnmapped(key) : this.context
     const root = length === 0 ? EMPTY : context.createTreeNode(0, length - 1, 0, false, null)
     return this._makeView(context, root, writable, 0, timeout, wait)
   }
 
   move({ length = this.core.length, key = null, writable = this.writable } = {}) {
-    this.context = key ? this.context.getContextByKey(key) : this.context
+    this.context = key ? this.context.getContextUnmapped(key) : this.context
     this.writable = writable
 
     this._setRoot(this._nodeAtSeq(length - 1), true)
+    if (key !== null) this.remap().catch(noop)
   }
 
   snapshot({ timeout = this.config.timeout, wait = this.config.wait } = {}) {
@@ -172,11 +177,47 @@ class Hyperbee extends EventEmitter {
     return seq < 0 ? EMPTY : this.context.createTreeNode(0, seq, 0, false, null)
   }
 
+  // moves the bee onto the core its own core is mapped to. The mappings the
+  // table carries are picked up from the checkpoint as it is inflated, and the
+  // tip is only consulted when it is local so this never waits on a peer
+  remap() {
+    if (this._remapping === null) {
+      this._remapping = this._remap().finally(() => {
+        this._remapping = null
+      })
+    }
+    return this._remapping
+  }
+
+  async _remap() {
+    const previous = this.context
+    const mapped = await previous.mappings.map(previous.core.key)
+
+    if (!b4a.equals(mapped, previous.core.key)) {
+      this.context = previous.getContextUnmapped(mapped)
+      await this.context.core.ready()
+
+      const root = this.root
+      if (root !== null && root !== EMPTY && root.context === previous && root.core === 0) {
+        this.root = this.context.createTreeNode(0, root.seq, 0, false, null)
+      }
+    }
+
+    try {
+      await this.context.update(this.config.options({ wait: false }))
+    } catch (err) {
+      if (err.code !== 'BLOCK_NOT_AVAILABLE') throw err
+    }
+  }
+
   async ready() {
     if (!this.core.opened) await this.core.ready()
 
-    if (this.root) return
+    if (this.root) return this.remap()
     if (this.preload) await this.preload()
+    if (this.root) return this.remap()
+
+    await this.remap()
     if (this.root) return
 
     this._setRoot(this._lastNodeInCore(), false)
@@ -202,10 +243,14 @@ class Hyperbee extends EventEmitter {
     await this.context.update(config)
 
     const cores = []
+    const seen = new Set()
 
     // index 0 is the core this bee is viewing, the rest are referenced cores
     for (let i = 0; i <= this.context.cores.length; i++) {
-      const key = this.context.getCoreKey(i)
+      const key = await this.context.getCoreKey(i)
+      const hex = b4a.toString(key, 'hex')
+      if (seen.has(hex)) continue
+      seen.add(hex)
       if (!local && b4a.equals(key, this.context.local.key)) continue
       cores.push(key)
     }
@@ -297,7 +342,7 @@ class Hyperbee extends EventEmitter {
     const value = key.value || (await inflateValue(key, config))
 
     return {
-      core: key.context.getCore(key.core),
+      core: await key.context.getCore(key.core),
       offset: key.offset,
       seq: key.seq,
       key: key.key,
@@ -307,6 +352,7 @@ class Hyperbee extends EventEmitter {
 
   async bootstrap(config) {
     if (!this.root) await this.ready()
+    if (this._remapping !== null) await this._remapping
     if (this.unbatch) await this._rollback(config)
     return this.root === EMPTY ? null : this.root
   }
