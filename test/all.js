@@ -17,6 +17,7 @@ async function runTests() {
   await import('./fuzz-diff.js')
   await import('./fuzz-multiwriter.js')
   await import('./perf.js')
+  await import('./map-core.js')
   await import('./prefetch.js')
   await import('./tree.js')
   await import('./undo.js')
