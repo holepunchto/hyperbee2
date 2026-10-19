@@ -1,5 +1,4 @@
 const b4a = require('b4a')
-const Hypercore = require('hypercore')
 const EventEmitter = require('events')
 const { RangeStream } = require('./lib/ranges.js')
 const { DiffStream } = require('./lib/diff.js')
@@ -8,7 +7,7 @@ const NodeCache = require('./lib/cache.js')
 const WriteBatch = require('./lib/write.js')
 const copyChanges = require('./lib/copy.js')
 const CoreContext = require('./lib/context.js')
-const SessionConfig = require('./lib/session-config.js')
+const { HypercoreSession } = require('./lib/hypercore-session.js')
 const Downloader = require('./lib/download.js')
 const { inflate, inflateValue } = require('./lib/inflate.js')
 const { EMPTY, T } = require('./lib/tree.js')
@@ -17,17 +16,16 @@ class Hyperbee extends EventEmitter {
   constructor(store, opts = {}) {
     super()
 
+    // HypercoreSession options
+    const { timeout = 0, wait = true, trace = null } = opts
+
     const {
       t = T,
       key = null,
       encryption = null,
       getEncryptionProvider = toEncryptionProvider(encryption),
       maxCacheSize = 4096,
-      config = new SessionConfig([], 0, true, null),
-      activeRequests = config.activeRequests,
-      timeout = config.timeout,
-      wait = config.wait,
-      trace = config.trace,
+      session = new HypercoreSession({ timeout, wait, trace }),
       core = getRootCore(store, key, getEncryptionProvider),
       context = new CoreContext(
         store,
@@ -48,7 +46,7 @@ class Hyperbee extends EventEmitter {
     this.root = root
     this.t = t
     this.context = context
-    this.config = config.sub(activeRequests, timeout, wait, trace)
+    this.session = session
     this.view = view
     this.writable = writable
     this.unbatch = unbatch
@@ -106,11 +104,8 @@ class Hyperbee extends EventEmitter {
   _makeView(context, root, writable, unbatch, timeout, wait) {
     return new Hyperbee(this.store, {
       t: this.t,
-      config: this.config,
+      session: this.session.detach({ timeout, wait }),
       core: context.core,
-      activeRequests: [],
-      timeout,
-      wait,
       context,
       root,
       view: true,
@@ -125,8 +120,8 @@ class Hyperbee extends EventEmitter {
     length = this.core.length,
     key = null,
     writable = false,
-    timeout = this.config.timeout,
-    wait = this.config.wait
+    timeout = this.session.timeout,
+    wait = this.session.wait
   } = {}) {
     const context = key ? this.context.getContextByKey(key) : this.context
     const root = length === 0 ? EMPTY : context.createTreeNode(0, length - 1, 0, false, null)
@@ -140,11 +135,11 @@ class Hyperbee extends EventEmitter {
     this._setRoot(this._nodeAtSeq(length - 1), true)
   }
 
-  snapshot({ timeout = this.config.timeout, wait = this.config.wait } = {}) {
+  snapshot({ timeout = this.session.timeout, wait = this.session.wait } = {}) {
     return this._makeView(this.context, this.root, false, 0, timeout, wait)
   }
 
-  undo(n, { timeout = this.config.timeout, wait = this.config.wait } = {}) {
+  undo(n, { timeout = this.session.timeout, wait = this.session.wait } = {}) {
     return this._makeView(this.context, this.root, true, n, timeout, wait)
   }
 
@@ -189,7 +184,7 @@ class Hyperbee extends EventEmitter {
 
   async close() {
     if (!this.root) await this.ready()
-    Hypercore.destroyRequests(this.config.activeRequests, null)
+    this.session.destroy()
     if (this.view) return
     if (this.store.closing) return this.store.close()
     await this.store.close()
@@ -197,9 +192,9 @@ class Hyperbee extends EventEmitter {
   }
 
   async cores({ local = true, ...opts } = {}) {
-    const config = this.config.options(opts)
+    const client = this.session.client(opts)
     await this.ready()
-    await this.context.update(config)
+    await this.context.update(client)
 
     const cores = []
 
@@ -225,13 +220,10 @@ class Hyperbee extends EventEmitter {
     return new ChangesStream(this, options)
   }
 
-  async reindex(
-    until,
-    { timeout = this.config.timeout, wait = this.config.wait, prefetch = 128, map = null } = {}
-  ) {
+  async reindex(until, { timeout, wait, prefetch = 128, map = null } = {}) {
     if (!this.writable) throw new Error('Not writable')
 
-    const config = this.config.options({ timeout, wait })
+    const client = this.session.client({ timeout, wait })
 
     const changes = []
 
@@ -247,7 +239,7 @@ class Hyperbee extends EventEmitter {
     await local.lock.lock()
 
     try {
-      await copyChanges(this, changes, config, map)
+      await copyChanges(this, changes, client, map)
     } finally {
       local.lock.unlock()
     }
@@ -266,10 +258,10 @@ class Hyperbee extends EventEmitter {
   }
 
   async download(range = {}) {
-    const config = this.config.detach(range)
-    const root = await this.bootstrap(config)
+    const client = this.session.client(range)
+    const root = await this.bootstrap(client)
     if (!root) return
-    const d = new Downloader(this, root, config, range)
+    const d = new Downloader(this, root, this.session, range)
     await d.run()
   }
 
@@ -282,19 +274,20 @@ class Hyperbee extends EventEmitter {
 
   async compat() {
     await this.ready()
-    return this.context.getBlockType(0, this.config)
+    const client = this.session.client()
+    return this.context.getBlockType(0, client)
   }
 
-  async inflate(ptr, config) {
+  async inflate(ptr, client) {
     if (!ptr.value) {
-      await inflate(ptr, config)
+      await inflate(ptr, client)
     }
     this.bump(ptr)
     return ptr.value
   }
 
-  async finalizeKeyPointer(key, config) {
-    const value = key.value || (await inflateValue(key, config))
+  async finalizeKeyPointer(key, client) {
+    const value = key.value || (await inflateValue(key, client))
 
     return {
       core: key.context.getCore(key.core),
@@ -305,13 +298,13 @@ class Hyperbee extends EventEmitter {
     }
   }
 
-  async bootstrap(config) {
+  async bootstrap(client) {
     if (!this.root) await this.ready()
-    if (this.unbatch) await this._rollback(config)
+    if (this.unbatch) await this._rollback(client)
     return this.root === EMPTY ? null : this.root
   }
 
-  async _rollback(config) {
+  async _rollback(client) {
     const expected = this.unbatch
 
     let n = expected
@@ -320,14 +313,14 @@ class Hyperbee extends EventEmitter {
 
     while (n > 0 && length > 0 && expected === this.unbatch) {
       const seq = length - 1
-      const blk = await context.getBlock(seq, 0, config, null)
+      const blk = await context.getBlock(seq, 0, client, null)
 
       if (!blk.previous) {
         length = 0
         break
       }
 
-      context = await context.getContext(blk.previous.core, config, blk)
+      context = await context.getContext(blk.previous.core, client, blk)
       length = blk.previous.seq + 1
       n--
     }
@@ -347,13 +340,13 @@ class Hyperbee extends EventEmitter {
   }
 
   async get(key, opts) {
-    const config = this.config.options(opts)
+    const client = this.session.client(opts)
 
-    let ptr = await this.bootstrap(config)
+    let ptr = await this.bootstrap(client)
     if (!ptr) return null
 
     while (true) {
-      const v = ptr.value ? this.bump(ptr) : await this.inflate(ptr, config)
+      const v = ptr.value ? this.bump(ptr) : await this.inflate(ptr, client)
 
       let s = 0
       let e = v.keys.length
@@ -365,7 +358,7 @@ class Hyperbee extends EventEmitter {
 
         c = b4a.compare(key, m.key)
 
-        if (c === 0) return this.finalizeKeyPointer(m, config)
+        if (c === 0) return this.finalizeKeyPointer(m, client)
 
         if (c < 0) e = mid
         else s = mid + 1

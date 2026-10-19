@@ -5,8 +5,9 @@ const { RangeIterator } = require('../lib/ranges.js')
 
 test('range prefetch adapts to trees with small nodes', async function (t) {
   const db2 = await createRemoteSkinnyTree(t)
+  const client = db2.session.client()
 
-  const it = new RangeIterator(db2, { limit: 20 })
+  const it = new RangeIterator(db2, client, { limit: 20 })
   await it.open()
 
   const first = await it.next()
@@ -18,8 +19,9 @@ test('range prefetch adapts to trees with small nodes', async function (t) {
 
 test('unbounded range streams prefetch too', async function (t) {
   const db2 = await createRemoteSkinnyTree(t)
+  const client = db2.session.client()
 
-  const it = new RangeIterator(db2, {})
+  const it = new RangeIterator(db2, client, {})
   await it.open()
 
   const first = await it.next()
@@ -31,8 +33,9 @@ test('unbounded range streams prefetch too', async function (t) {
 
 test('reverse range prefetch fetches the preceding siblings', async function (t) {
   const db2 = await createRemoteSkinnyTree(t)
+  const client = db2.session.client()
 
-  const it = new RangeIterator(db2, { lte: b4a.from('k0056'), reverse: true, limit: 20 })
+  const it = new RangeIterator(db2, client, { lte: b4a.from('k0056'), reverse: true, limit: 20 })
   await it.open()
 
   const first = await it.next()
@@ -68,8 +71,9 @@ test('reverse range prefetch fetches the preceding siblings', async function (t)
 
 test('no prefetch when the current leaf covers the limit', async function (t) {
   const db2 = await createRemoteSkinnyTree(t)
+  const client = db2.session.client()
 
-  const it = new RangeIterator(db2, { limit: 1 })
+  const it = new RangeIterator(db2, client, { limit: 1 })
   await it.open()
 
   const first = await it.next()
