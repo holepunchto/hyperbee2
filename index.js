@@ -17,7 +17,7 @@ class Hyperbee extends EventEmitter {
     super()
 
     // HypercoreSession options
-    const { timeout = 0, wait = true, trace = null } = opts
+    const { timeout = 0, wait = true } = opts
 
     const {
       t = T,
@@ -25,7 +25,8 @@ class Hyperbee extends EventEmitter {
       encryption = null,
       getEncryptionProvider = toEncryptionProvider(encryption),
       maxCacheSize = 4096,
-      session = new HypercoreSession({ timeout, wait, trace }),
+      session = new HypercoreSession({ timeout, wait }),
+      trace = null,
       core = getRootCore(store, key, getEncryptionProvider),
       context = new CoreContext(
         store,
@@ -47,6 +48,7 @@ class Hyperbee extends EventEmitter {
     this.t = t
     this.context = context
     this.session = session
+    this.trace = trace
     this.view = view
     this.writable = writable
     this.unbatch = unbatch
@@ -259,9 +261,10 @@ class Hyperbee extends EventEmitter {
 
   async download(range = {}) {
     const client = this.session.client(range)
-    const root = await this.bootstrap(client)
+    const trace = range.trace ?? this.trace
+    const root = await this.bootstrap(client, trace)
     if (!root) return
-    const d = new Downloader(this, root, this.session, range)
+    const d = new Downloader(this, root, this.session, range, trace)
     await d.run()
   }
 
@@ -272,22 +275,23 @@ class Hyperbee extends EventEmitter {
     return ptr.value
   }
 
-  async compat() {
+  async compat(opts) {
     await this.ready()
     const client = this.session.client()
-    return this.context.getBlockType(0, client)
+    const trace = opts?.trace ?? this.trace
+    return this.context.getBlockType(0, client, trace)
   }
 
-  async inflate(ptr, client) {
+  async inflate(ptr, client, trace) {
     if (!ptr.value) {
-      await inflate(ptr, client)
+      await inflate(ptr, client, trace)
     }
     this.bump(ptr)
     return ptr.value
   }
 
-  async finalizeKeyPointer(key, client) {
-    const value = key.value || (await inflateValue(key, client))
+  async finalizeKeyPointer(key, client, trace) {
+    const value = key.value || (await inflateValue(key, client, trace))
 
     return {
       core: key.context.getCore(key.core),
@@ -298,13 +302,13 @@ class Hyperbee extends EventEmitter {
     }
   }
 
-  async bootstrap(client) {
+  async bootstrap(client, trace) {
     if (!this.root) await this.ready()
-    if (this.unbatch) await this._rollback(client)
+    if (this.unbatch) await this._rollback(client, trace)
     return this.root === EMPTY ? null : this.root
   }
 
-  async _rollback(client) {
+  async _rollback(client, trace) {
     const expected = this.unbatch
 
     let n = expected
@@ -313,7 +317,7 @@ class Hyperbee extends EventEmitter {
 
     while (n > 0 && length > 0 && expected === this.unbatch) {
       const seq = length - 1
-      const blk = await context.getBlock(seq, 0, client, null)
+      const blk = await context.getBlock(seq, 0, client, null, trace)
 
       if (!blk.previous) {
         length = 0
@@ -341,12 +345,13 @@ class Hyperbee extends EventEmitter {
 
   async get(key, opts) {
     const client = this.session.client(opts)
+    const trace = opts?.trace ?? this.trace
 
-    let ptr = await this.bootstrap(client)
+    let ptr = await this.bootstrap(client, trace)
     if (!ptr) return null
 
     while (true) {
-      const v = ptr.value ? this.bump(ptr) : await this.inflate(ptr, client)
+      const v = ptr.value ? this.bump(ptr) : await this.inflate(ptr, client, trace)
 
       let s = 0
       let e = v.keys.length
