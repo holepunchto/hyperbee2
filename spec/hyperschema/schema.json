@@ -409,6 +409,32 @@
           "name": "invalidation",
           "type": "uint",
           "version": 1
+        },
+        {
+          "name": "mappings",
+          "array": true,
+          "type": "@bee/mapping",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "mapping",
+      "namespace": "bee",
+      "compact": true,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "from",
+          "required": true,
+          "type": "fixed32",
+          "version": 1
+        },
+        {
+          "name": "to",
+          "required": true,
+          "type": "fixed32",
+          "version": 1
         }
       ]
     }

@@ -229,6 +229,23 @@ bee.register({
 })
 
 bee.register({
+  name: 'mapping',
+  compact: true,
+  fields: [
+    {
+      name: 'from',
+      type: 'fixed32',
+      required: true
+    },
+    {
+      name: 'to',
+      type: 'fixed32',
+      required: true
+    }
+  ]
+})
+
+bee.register({
   name: 'block-0',
   fields: [
     {
@@ -343,6 +360,11 @@ bee.register({
     {
       name: 'invalidation', // TODO: in future block-2 should be required
       type: 'uint'
+    },
+    {
+      name: 'mappings',
+      type: '@bee/mapping',
+      array: true
     }
   ]
 })

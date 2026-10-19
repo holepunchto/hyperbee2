@@ -458,7 +458,8 @@ const encoding14 = {
       (m.values ? 16 : 0) |
       (m.cohorts ? 32 : 0) |
       (m.t ? 64 : 0) |
-      (m.invalidation ? 128 : 0)
+      (m.invalidation ? 128 : 0) |
+      (m.mappings ? 256 : 0)
 
     c.uint.preencode(state, m.type)
     c.uint.preencode(state, m.checkpoint)
@@ -473,6 +474,7 @@ const encoding14 = {
     if (m.cohorts) encoding14_9.preencode(state, m.cohorts)
     if (m.t) c.uint.preencode(state, m.t)
     if (m.invalidation) c.uint.preencode(state, m.invalidation)
+    if (m.mappings) encoding14_12.preencode(state, m.mappings)
   },
   encode(state, m) {
     const flags =
@@ -483,7 +485,8 @@ const encoding14 = {
       (m.values ? 16 : 0) |
       (m.cohorts ? 32 : 0) |
       (m.t ? 64 : 0) |
-      (m.invalidation ? 128 : 0)
+      (m.invalidation ? 128 : 0) |
+      (m.mappings ? 256 : 0)
 
     c.uint.encode(state, m.type)
     c.uint.encode(state, m.checkpoint)
@@ -498,6 +501,7 @@ const encoding14 = {
     if (m.cohorts) encoding14_9.encode(state, m.cohorts)
     if (m.t) c.uint.encode(state, m.t)
     if (m.invalidation) c.uint.encode(state, m.invalidation)
+    if (m.mappings) encoding14_12.encode(state, m.mappings)
   },
   decode(state) {
     const r0 = c.uint.decode(state)
@@ -517,10 +521,35 @@ const encoding14 = {
       values: (flags & 16) !== 0 ? encoding14_8.decode(state) : null,
       cohorts: (flags & 32) !== 0 ? encoding14_9.decode(state) : null,
       t: (flags & 64) !== 0 ? c.uint.decode(state) : 0,
-      invalidation: (flags & 128) !== 0 ? c.uint.decode(state) : 0
+      invalidation: (flags & 128) !== 0 ? c.uint.decode(state) : 0,
+      mappings: (flags & 256) !== 0 ? encoding14_12.decode(state) : null
     }
   }
 }
+
+// @bee/mapping
+const encoding15 = {
+  preencode(state, m) {
+    c.fixed32.preencode(state, m.from)
+    c.fixed32.preencode(state, m.to)
+  },
+  encode(state, m) {
+    c.fixed32.encode(state, m.from)
+    c.fixed32.encode(state, m.to)
+  },
+  decode(state) {
+    const r0 = c.fixed32.decode(state)
+    const r1 = c.fixed32.decode(state)
+
+    return {
+      from: r0,
+      to: r1
+    }
+  }
+}
+
+// @bee/block-1.mappings, deferred due to recusive use
+const encoding14_12 = c.array(encoding15)
 
 function setVersion(v) {
   version = v
@@ -575,6 +604,8 @@ function getEncoding(name) {
       return encoding13
     case '@bee/block-1':
       return encoding14
+    case '@bee/mapping':
+      return encoding15
     default:
       throw new Error('Encoder not found ' + name)
   }
