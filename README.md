@@ -62,8 +62,14 @@ Options include:
   autoUpdate: false,       // Reload root node when underlying Hypercore is appended to?
   preload: null,           // A function called by ready() after the Hypercore is ready. Can be async.
   wait: true,              // Wait for Hypercore to download blocks
+  mapCore: null,           // async (key) => mappedKey | null. Redirect reads of a core to another core holding the same blocks
 }
 ```
+
+`mapCore` is asked once per core the tree references (and the core the tree
+is opened on). A non-null answer redirects every read of that core to the
+mapped core. Mappings are persisted next to the core table on the next write,
+so readers that open the tree later resolve them without the hook.
 
 If you pass your own `core`, consider increasing the inflight range on it (`256` minimum recommended, e.g. `{ inflightRange: [256, 512] }` when creating the core via Corestore) to match `hyperbee2` constructed cores.
 
@@ -158,6 +164,15 @@ Options:
   key: null,                 // Buffer or null. Key of the Hypercore
 }
 ```
+
+If `key` is mapped by `mapCore` the tree is moved onto the mapped core before
+the next operation, see `db.remap()`.
+
+#### `await db.remap()`
+
+Resolves the mapping of the core the tree is open on and moves the tree onto
+it. Called by `ready()`, `move()` and `checkout()`, and awaited by every
+operation, so it only needs calling to observe `db.core` right after a move.
 
 #### `db.snapshot([options])`
 
