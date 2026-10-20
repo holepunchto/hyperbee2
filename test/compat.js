@@ -393,7 +393,7 @@ test('latest-format writes stay non-compat', async function (t) {
 })
 
 async function walkNodes(db, ptr, out) {
-  const v = ptr.value || (await db.inflate(ptr, db.config))
+  const v = ptr.value || (await db.inflate(ptr, db.session.client()))
   out.push(v)
   for (let i = 0; i < v.children.length; i++) {
     await walkNodes(db, v.children.get(i), out)
