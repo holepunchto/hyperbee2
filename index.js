@@ -221,11 +221,19 @@ class Hyperbee extends EventEmitter {
 
     const cores = []
     const seen = new Set()
-    const queue = [this.root && this.root !== EMPTY ? this.root.context : this.context]
+    const root = this.root && this.root !== EMPTY ? this.root.context : this.context
+    const queue = [root]
 
     while (queue.length > 0) {
       const context = queue.shift()
-      await context.update(config)
+
+      // a referenced core whose checkpoint cannot be read as a tree is a leaf
+      try {
+        await context.update(config)
+      } catch (err) {
+        if (context === root || isNotAvailable(err)) throw err
+        continue
+      }
 
       // index 0 is the core this context is viewing, the rest are referenced cores
       for (let i = 0; i <= context.cores.length; i++) {
@@ -426,6 +434,14 @@ class Hyperbee extends EventEmitter {
 }
 
 module.exports = Hyperbee
+
+function isNotAvailable(err) {
+  return (
+    err.code === 'BLOCK_NOT_AVAILABLE' ||
+    err.code === 'REQUEST_TIMEOUT' ||
+    err.code === 'REQUEST_CANCELLED'
+  )
+}
 
 function noop() {}
 
