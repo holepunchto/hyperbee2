@@ -224,14 +224,21 @@ class Hyperbee extends EventEmitter {
     const root = this.root && this.root !== EMPTY ? this.root.context : this.context
     const queue = [root]
 
+    // the table of the root resolves from the block the root lives in, as a
+    // read would, never from the tip of its core
+    if (root === this.root.context) {
+      const block = await root.getBlock(this.root.seq, 0, config, null)
+      await root._inflateCheckpoint(this.root.seq + 1, block, config, false)
+    }
+
     while (queue.length > 0) {
       const context = queue.shift()
 
       // a referenced core whose checkpoint cannot be read as a tree is a leaf
       try {
-        await context.update(config)
+        if (context !== root) await context.update(config)
       } catch (err) {
-        if (context === root || isNotAvailable(err)) throw err
+        if (isNotAvailable(err)) throw err
         continue
       }
 
