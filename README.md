@@ -62,7 +62,7 @@ Options include:
   autoUpdate: false,       // Reload root node when underlying Hypercore is appended to?
   preload: null,           // A function called by ready() after the Hypercore is ready. Can be async.
   wait: true,              // Wait for Hypercore to download blocks
-  mappings: null,          // [{ from, to }]. Read core `from` as core `to`, which holds the same blocks
+  mappings: null,          // [{ from, to }] or a Hyperbee.Mappings to share between trees. Read core `from` as core `to`, which holds the same blocks
 }
 ```
 

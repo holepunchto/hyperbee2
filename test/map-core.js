@@ -518,6 +518,32 @@ test('mappings - cores({ recursive: true }) does not descend into a core that is
   await b.close()
 })
 
+test('mappings - trees given the same Mappings share what each of them learns', async function (t) {
+  const store = new Corestore(await t.tmp())
+  t.teardown(() => store.close())
+
+  const a = await source(store, 50)
+  const copy = await copyCore(store, a.core, 'copy')
+  await a.core.clear(0, a.core.length)
+
+  const mappings = new Bee.Mappings()
+  const b = new Bee(store.namespace('b'), { key: a.core.key, mappings, writable: false })
+  const c = new Bee(store.namespace('c'), { key: a.core.key, mappings, writable: false })
+  await b.ready()
+  await c.ready()
+  t.alike(b.core.key, a.core.key, 'nothing is mapped yet')
+
+  b.addMappings([{ from: a.core.key, to: copy.key }])
+  t.alike(b.core.key, copy.key, 'the tree told moved')
+  t.ok(c.context.mappings.get(a.core.key) !== null, 'the other tree knows the mapping')
+  c.addMappings([])
+  t.alike(c.core.key, copy.key, 'and moves once asked to look')
+  await readAll(c, 50, t, 'reading through it')
+
+  await b.close()
+  await c.close()
+})
+
 function replicateStores(a, b) {
   const s1 = a.replicate(true)
   const s2 = b.replicate(false)

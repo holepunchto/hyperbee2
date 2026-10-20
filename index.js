@@ -30,7 +30,7 @@ class Hyperbee extends EventEmitter {
       wait = config.wait,
       trace = config.trace,
       mappings = null,
-      mappingTable = new Mappings(mappings),
+      mappingTable = mappings instanceof Mappings ? mappings : new Mappings(mappings),
       core = getRootCore(store, key, getEncryptionProvider, mappingTable),
       context = new CoreContext(
         store,
@@ -65,6 +65,10 @@ class Hyperbee extends EventEmitter {
 
   static isHyperbee(bee) {
     return bee instanceof Hyperbee
+  }
+
+  static get Mappings() {
+    return Mappings
   }
 
   isGenesis() {
