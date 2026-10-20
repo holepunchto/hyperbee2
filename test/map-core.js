@@ -33,66 +33,60 @@ async function readAll(bee, n, t, msg) {
   t.pass(msg)
 }
 
-test('mapCore - the viewed core is read through its mapping', async function (t) {
+test('mappings - the viewed core is read through its mapping', async function (t) {
   const store = new Corestore(await t.tmp())
   t.teardown(() => store.close())
 
   const a = await source(store, 50)
   const copy = await copyCore(store, a.core, 'copy')
+  await a.core.clear(0, a.core.length)
 
-  const asked = []
-  const mapCore = (k) => {
-    asked.push(hex(k))
-    return b4a.equals(k, a.core.key) ? copy.key : null
-  }
-
-  const b = new Bee(store.namespace('b'), { key: a.core.key, mapCore, writable: false })
+  const mappings = [{ from: a.core.key, to: copy.key }]
+  const b = new Bee(store.namespace('b'), { key: a.core.key, mappings, writable: false })
   await b.ready()
 
   t.alike(b.core.key, copy.key, 'the view sits on the mapped core')
-  t.ok(asked.includes(hex(a.core.key)), 'the hook was asked about the original')
   await readAll(b, 50, t, 'every entry reads through the mapping')
   t.alike((await b.cores()).map(hex), [hex(copy.key)], 'cores() lists the mapped core only')
 
   await b.close()
 })
 
-test('mapCore - the references of a writer resolve to the mapped core', async function (t) {
+test('mappings - the references of a writer resolve to the mapped core', async function (t) {
   const store = new Corestore(await t.tmp())
   t.teardown(() => store.close())
 
   const a = await source(store, 50)
   const copy = await copyCore(store, a.core, 'copy')
-  const mapCore = (k) => (b4a.equals(k, a.core.key) ? copy.key : null)
+  const mappings = [{ from: a.core.key, to: copy.key }]
 
-  const w = new Bee(store.namespace('w'), { mapCore })
+  const w = new Bee(store.namespace('w'), { mappings })
   await w.ready()
   w.move({ key: a.core.key, length: a.core.length })
-  await w.core.ready()
   t.alike(w.core.key, copy.key, 'moving onto the original lands on the mapping')
 
   const batch = w.write()
   for (let i = 50; i < 60; i++) batch.tryPut(key(i), value(i))
   await batch.flush()
 
-  // the local core references the copy, never the original
   const referenced = (await w.cores({ local: false })).map(hex)
-  t.absent(referenced.includes(hex(a.core.key)), 'the original key is not in the table')
-
+  t.absent(referenced.includes(hex(a.core.key)), 'the original is not among the cores read')
   await w.close()
+
+  await a.core.clear(0, a.core.length)
 
   const again = new Bee(store.namespace('w'))
   await again.ready()
   t.alike(
     (await again.cores({ local: false })).map(hex),
     referenced,
-    'the persisted table holds the mapped keys'
+    'the persisted mappings resolve the table'
   )
-  await readAll(again, 60, t, 'a reader without the hook reads everything via the persisted table')
+  await readAll(again, 60, t, 'a reader without the mappings reads everything via the checkpoint')
   await again.close()
 })
 
-test('mapCore - an existing table is remapped on load and persisted on the next flush', async function (t) {
+test('mappings - an existing table is remapped on load and persisted on the next flush', async function (t) {
   const store = new Corestore(await t.tmp())
   t.teardown(() => store.close())
 
@@ -114,9 +108,9 @@ test('mapCore - an existing table is remapped on load and persisted on the next 
   await w.close()
 
   const copy = await copyCore(store, a.core, 'copy')
-  const mapCore = (k) => (b4a.equals(k, a.core.key) ? copy.key : null)
+  const mappings = [{ from: a.core.key, to: copy.key }]
 
-  const mapped = new Bee(store.namespace('w'), { mapCore })
+  const mapped = new Bee(store.namespace('w'), { mappings })
   await mapped.ready()
   const cores = (await mapped.cores({ local: false })).map(hex)
   t.ok(cores.includes(hex(copy.key)), 'the loaded table is remapped')
@@ -130,16 +124,18 @@ test('mapCore - an existing table is remapped on load and persisted on the next 
   }
   await mapped.close()
 
+  await a.core.clear(0, a.core.length)
+
   const plain = new Bee(store.namespace('w'))
   await plain.ready()
   const persisted = (await plain.cores({ local: false })).map(hex)
-  t.ok(persisted.includes(hex(copy.key)), 'the remapped table was persisted by the flush')
-  t.absent(persisted.includes(hex(a.core.key)), 'without the hook, the original is still gone')
-  await readAll(plain, 61, t, 'a reader without the hook reads through the persisted mapping')
+  t.ok(persisted.includes(hex(copy.key)), 'the mappings were persisted by the flush')
+  t.absent(persisted.includes(hex(a.core.key)), 'without them given, the original is still gone')
+  await readAll(plain, 61, t, 'a reader without the mappings reads through the persisted ones')
   await plain.close()
 })
 
-test('mapCore - the persisted mapping survives an undo below it', async function (t) {
+test('mappings - the persisted mapping survives an undo below it', async function (t) {
   const store = new Corestore(await t.tmp())
   t.teardown(() => store.close())
 
@@ -156,9 +152,9 @@ test('mapCore - the persisted mapping survives an undo below it', async function
   await w.close()
 
   const copy = await copyCore(store, a.core, 'copy')
-  const mapCore = (k) => (b4a.equals(k, a.core.key) ? copy.key : null)
+  const mappings = [{ from: a.core.key, to: copy.key }]
 
-  const mapped = new Bee(store.namespace('w'), { mapCore })
+  const mapped = new Bee(store.namespace('w'), { mappings })
   await mapped.ready()
   {
     const batch = mapped.write()
@@ -167,7 +163,9 @@ test('mapCore - the persisted mapping survives an undo below it', async function
   }
   await mapped.close()
 
-  // a reader without the hook, viewing a root written before the mapping was
+  await a.core.clear(0, a.core.length)
+
+  // a reader without the mappings, viewing a root written before they were
   // recorded, still resolves the table from its latest checkpoint
   const plain = new Bee(store.namespace('w'))
   await plain.ready()
@@ -183,16 +181,16 @@ test('mapCore - the persisted mapping survives an undo below it', async function
   await plain.close()
 })
 
-test('mapCore - a mapping met in another writer is recorded locally', async function (t) {
+test('mappings - a mapping met in another writer is recorded locally', async function (t) {
   const store = new Corestore(await t.tmp())
   t.teardown(() => store.close())
 
   const a = await source(store, 50)
   const copy = await copyCore(store, a.core, 'copy')
-  const mapCore = (k) => (b4a.equals(k, a.core.key) ? copy.key : null)
+  const mappings = [{ from: a.core.key, to: copy.key }]
 
-  // b writes on top of a with the hook, recording the mapping in its checkpoint
-  const b = new Bee(store.namespace('b'), { mapCore })
+  // b writes on top of a with the mapping, recording it in its checkpoint
+  const b = new Bee(store.namespace('b'), { mappings })
   await b.ready()
   b.move({ key: a.core.key, length: a.core.length })
   {
@@ -201,7 +199,9 @@ test('mapCore - a mapping met in another writer is recorded locally', async func
     await batch.flush()
   }
 
-  // c never has the hook and only ever sees b's head
+  await a.core.clear(0, a.core.length)
+
+  // c is never given the mapping and only ever sees b's head
   const c = new Bee(store.namespace('c'))
   await c.ready()
   c.move({ key: b.context.local.key, length: b.context.local.length })
@@ -224,7 +224,7 @@ test('mapCore - a mapping met in another writer is recorded locally', async func
   await again.close()
 })
 
-test('mapCore - a remote reads the whole tree after the original data is gone', async function (t) {
+test('mappings - a remote reads the whole tree after the original data is gone', async function (t) {
   const origin = new Corestore(await t.tmp())
   t.teardown(() => origin.close())
 
@@ -242,9 +242,9 @@ test('mapCore - a remote reads the whole tree after the original data is gone', 
   await w.close()
 
   const copy = await copyCore(origin, a.core, 'copy')
-  const mapCore = (k) => (b4a.equals(k, a.core.key) ? copy.key : null)
+  const mappings = [{ from: a.core.key, to: copy.key }]
 
-  const mapped = new Bee(origin.namespace('w'), { mapCore })
+  const mapped = new Bee(origin.namespace('w'), { mappings })
   await mapped.ready()
   {
     const batch = mapped.write()
@@ -262,7 +262,7 @@ test('mapCore - a remote reads the whole tree after the original data is gone', 
   t.teardown(() => remote.close())
   const stop = replicateStores(origin, remote)
 
-  const reader = new Bee(remote.session(), { key: wKey, mapCore, writable: false })
+  const reader = new Bee(remote.session(), { key: wKey, mappings, writable: false })
   await reader.ready()
   await reader.core.update({ wait: true })
   t.is(reader.core.length, 21, 'the remote learnt the head')
@@ -288,8 +288,8 @@ test('mapCore - a remote reads the whole tree after the original data is gone', 
 
   await stop()
 
-  // a second remote without the hook: a head written before the mapping was
-  // recorded runs into the cleared original, the head that carries it does not
+  // a second remote never given the mappings: a head written before they were
+  // recorded runs into the cleared original, the head that carries them does not
   const other = new Corestore(await t.tmp())
   t.teardown(() => other.close())
   const stopOther = replicateStores(origin, other)
@@ -307,7 +307,7 @@ test('mapCore - a remote reads the whole tree after the original data is gone', 
   await t.exception(
     before.get(key(0), { wait: false }),
     /BLOCK_NOT_AVAILABLE/,
-    'before the record, a reader without the hook hits missing data'
+    'before the record, a reader without the mappings hits missing data'
   )
   await before.close()
 
@@ -319,7 +319,7 @@ test('mapCore - a remote reads the whole tree after the original data is gone', 
   await stopOther()
 })
 
-test('mapCore - move and checkout onto an original resolve before the first operation', async function (t) {
+test('mappings - move, checkout and write onto an original resolve synchronously', async function (t) {
   const store = new Corestore(await t.tmp())
   t.teardown(() => store.close())
 
@@ -327,46 +327,32 @@ test('mapCore - move and checkout onto an original resolve before the first oper
   const copy = await copyCore(store, a.core, 'copy')
   await a.core.clear(0, a.core.length)
 
-  let asked = 0
-  const mapCore = (k) => {
-    asked++
-    return b4a.equals(k, a.core.key) ? copy.key : null
-  }
-
-  const w = new Bee(store.namespace('w'), { mapCore })
+  const mappings = [{ from: a.core.key, to: copy.key }]
+  const w = new Bee(store.namespace('w'), { mappings })
   await w.ready()
 
   w.move({ key: a.core.key, length: a.core.length })
-  await readAll(w, 50, t, 'reads after an un-awaited move go through the mapping')
+  t.alike(w.core.key, copy.key, 'the bee sits on the mapped core right after the move')
   t.alike(w.head().key, copy.key, 'the head is on the mapped core')
-  t.alike(w.core.key, copy.key, 'the bee sits on the mapped core')
-
-  {
-    const batch = w.write()
-    batch.tryPut(key(50), value(50))
-    await batch.flush()
-  }
-  t.absent(
-    (await w.cores()).some((k) => b4a.equals(k, a.core.key)),
-    'the write referenced the mapped core'
-  )
+  await readAll(w, 50, t, 'reads go through the mapping')
 
   const view = w.checkout({ key: a.core.key, length: a.core.length })
-  await readAll(view, 50, t, 'a checkout onto the original reads through the mapping')
-  t.alike(view.head().key, copy.key, 'the view head is on the mapped core')
+  t.alike(view.head().key, copy.key, 'a checkout onto the original sits on the mapped core')
+  await readAll(view, 50, t, 'and reads through it')
   await view.close()
 
-  const asked1 = asked
-  const again = w.checkout({ key: a.core.key, length: a.core.length })
-  await again.ready()
-  t.alike(again.head().key, copy.key, 'a second checkout lands on the mapped core')
-  t.is(asked, asked1, 'without asking the hook again')
-  await again.close()
-
+  const batch = w.write({ key: a.core.key, length: a.core.length })
+  batch.tryPut(key(50), value(50))
+  await batch.flush()
+  await readAll(w, 51, t, 'a batch keyed by the original built on the mapped core')
+  t.absent(
+    (await w.cores()).some((k) => b4a.equals(k, a.core.key)),
+    'the original is not among the cores read'
+  )
   await w.close()
 })
 
-test('mapCore - a read in flight survives its core being remapped', async function (t) {
+test('mappings - added after open, a read in flight survives its core being remapped', async function (t) {
   const origin = new Corestore(await t.tmp())
   t.teardown(() => origin.close())
 
@@ -405,7 +391,7 @@ test('mapCore - a read in flight survives its core being remapped', async functi
   const stale = reader.context.opened[0]
   t.alike(stale.key, a.core.key, 'the read opened the core as referenced')
 
-  reader.context.mappings.add([{ from: a.core.key, to: copy.key }])
+  reader.addMappings([{ from: a.core.key, to: copy.key }])
   const hc = reader.context.getCore(1)
   t.alike(hc.key, copy.key, 'the next open resolves to the mapped core')
   t.absent(stale.closing, 'the superseded session is left to the reads holding it')
@@ -424,77 +410,65 @@ test('mapCore - a read in flight survives its core being remapped', async functi
   await stop()
 })
 
-function immediate() {
-  return new Promise((resolve) => setImmediate(resolve))
-}
-
-test('mapCore - a second move while the first is still being remapped wins', async function (t) {
+test('mappings - cores({ recursive: true }) walks the tables of every core reached', async function (t) {
   const store = new Corestore(await t.tmp())
   t.teardown(() => store.close())
 
+  // b links a, then clears and rewrites the tree: nothing in b's tree points
+  // into a any more but b's table still names it, and c builds on b
   const a = await source(store, 50)
-  const copyA = await copyCore(store, a.core, 'copy-a')
 
   const b = new Bee(store.namespace('b'))
   await b.ready()
+  b.move({ key: a.core.key, length: a.core.length })
   {
     const batch = b.write()
-    for (let i = 0; i < 10; i++) batch.tryPut(key(100 + i), value(100 + i))
+    batch.tryPut(key(50), value(50))
     await batch.flush()
   }
-  const copyB = await copyCore(store, b.core, 'copy-b')
-
-  let releaseA = null
-  const mapCore = (k) => {
-    if (b4a.equals(k, a.core.key)) {
-      return new Promise((resolve) => {
-        releaseA = () => resolve(copyA.key)
-      })
-    }
-    if (b4a.equals(k, b.core.key)) return copyB.key
-    return null
+  {
+    const batch = b.write()
+    batch.tryClear()
+    for (let i = 0; i < 50; i++) batch.tryPut(key(i), value(100 + i))
+    await batch.flush()
   }
 
-  const w = new Bee(store.namespace('w'), { mapCore })
-  await w.ready()
+  const c = new Bee(store.namespace('c'))
+  await c.ready()
+  c.move({ key: b.context.local.key, length: b.context.local.length })
+  {
+    const batch = c.write()
+    batch.tryPut(key(50), value(50))
+    await batch.flush()
+  }
 
-  w.move({ key: a.core.key, length: a.core.length })
-  w.move({ key: b.core.key, length: b.core.length })
-  for (let i = 0; i < 10 && releaseA === null; i++) await immediate()
-  releaseA()
+  const direct = (await c.cores({ local: false })).map(hex).sort()
+  const reachable = (await c.cores({ local: false, recursive: true })).map(hex).sort()
+  t.alike(direct, [hex(b.context.local.key)], "c's table names b only")
+  t.alike(
+    reachable,
+    [hex(a.core.key), hex(b.context.local.key)].sort(),
+    'recursively a is reached through b'
+  )
 
-  await w.core.ready()
-  t.alike(w.core.key, copyB.key, 'the bee sits on the mapping of the last move')
-  t.alike(w.head(), { length: b.core.length, key: copyB.key }, 'with the head of the last move')
-  t.alike((await w.get(key(100))).value, value(100), 'and reads its data')
-  t.is(await w.get(key(0)), null, 'not the data of the first move')
-
-  await w.close()
-})
-
-test('mapCore - a write onto a key given by the caller resolves it', async function (t) {
-  const store = new Corestore(await t.tmp())
-  t.teardown(() => store.close())
-
-  const a = await source(store, 50)
+  // the flow of a migration: find what is reachable, copy it, map it in one go
   const copy = await copyCore(store, a.core, 'copy')
   await a.core.clear(0, a.core.length)
+  c.addMappings([{ from: a.core.key, to: copy.key }])
 
-  const mapCore = (k) => (b4a.equals(k, a.core.key) ? copy.key : null)
-
-  const w = new Bee(store.namespace('w'), { mapCore })
-  await w.ready()
-
-  const batch = w.write({ key: a.core.key, length: a.core.length })
-  batch.tryPut(key(50), value(50))
-  await batch.flush()
-
-  await readAll(w, 51, t, 'the batch built on the mapped core')
-  t.absent(
-    (await w.cores()).some((k) => b4a.equals(k, a.core.key)),
-    'the key as given is not among the cores read'
+  t.alike(
+    (await c.cores({ local: false, recursive: true })).map(hex).sort(),
+    [hex(copy.key), hex(b.context.local.key)].sort(),
+    'the walk reports the mapped core'
   )
-  await w.close()
+  for (let i = 0; i < 50; i++) {
+    const node = await c.get(key(i))
+    if (!node || !b4a.equals(node.value, value(100 + i))) return t.fail('bad value for key ' + i)
+  }
+  t.alike((await c.get(key(50))).value, value(50), 'every entry still reads')
+
+  await c.close()
+  await b.close()
 })
 
 function replicateStores(a, b) {
@@ -512,6 +486,10 @@ function replicateStores(a, b) {
     s2.destroy()
     await closed
   }
+}
+
+function immediate() {
+  return new Promise((resolve) => setImmediate(resolve))
 }
 
 function noop() {}

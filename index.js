@@ -29,19 +29,16 @@ class Hyperbee extends EventEmitter {
       timeout = config.timeout,
       wait = config.wait,
       trace = config.trace,
-      mapCore = null,
-      mappings = new Mappings(mapCore),
-      core = getRootCore(store, key, getEncryptionProvider, mappings),
+      mappings = null,
+      mappingTable = new Mappings(mappings),
+      core = getRootCore(store, key, getEncryptionProvider, mappingTable),
       context = new CoreContext(
         store,
         core,
         new NodeCache(maxCacheSize),
         core,
         getEncryptionProvider,
-        mappings,
-        undefined,
-        undefined,
-        key
+        mappingTable
       ),
       root = null,
       view = false,
@@ -78,8 +75,8 @@ class Hyperbee extends EventEmitter {
 
   head() {
     if (!this.root) return null
-    if (this.root === EMPTY) return { length: 0, key: this.context.coreKey() }
-    return { length: this.root.seq + 1, key: this.root.context.coreKey() }
+    if (this.root === EMPTY) return { length: 0, key: this.context.core.key }
+    return { length: this.root.seq + 1, key: this.root.context.core.key }
   }
 
   get cache() {
@@ -216,28 +213,38 @@ class Hyperbee extends EventEmitter {
     this.emit('close')
   }
 
-  async cores({ local = true, ...opts } = {}) {
+  // the cores the tree reads from, mapped. Recursive walks the core tables of
+  // every core reached, so it covers what the tree can reach through them
+  async cores({ local = true, recursive = false, ...opts } = {}) {
     const config = this.config.options(opts)
     await this.ready()
-    await this.context.update(config)
 
     const cores = []
     const seen = new Set()
+    const queue = [this.root && this.root !== EMPTY ? this.root.context : this.context]
 
-    // index 0 is the core this bee is viewing, the rest are referenced cores
-    for (let i = 0; i <= this.context.cores.length; i++) {
-      const key =
-        i === 0
-          ? this.context.coreKey()
-          : await this.context.mappings.map(this.context.cores[i - 1].key)
-      const hex = b4a.toString(key, 'hex')
-      if (seen.has(hex)) continue
-      seen.add(hex)
-      if (!local && b4a.equals(key, this.context.local.key)) continue
-      cores.push(key)
+    while (queue.length > 0) {
+      const context = queue.shift()
+      await context.update(config)
+
+      // index 0 is the core this context is viewing, the rest are referenced cores
+      for (let i = 0; i <= context.cores.length; i++) {
+        const key = context.getCoreKey(i)
+        const hex = b4a.toString(key, 'hex')
+        if (seen.has(hex)) continue
+        seen.add(hex)
+
+        if (recursive && i > 0) queue.push(await context.getContext(i, config, null))
+        if (!local && b4a.equals(key, this.context.local.key)) continue
+        cores.push(key)
+      }
     }
 
     return cores
+  }
+
+  addMappings(mappings) {
+    this.context.mappings.add(mappings)
   }
 
   createReadStream(options) {
@@ -416,11 +423,10 @@ function toEncryptionProvider(encryption) {
 }
 
 function getRootCore(store, key, getEncryptionProvider, mappings) {
-  if (key) return CoreContext.openCore(store, key, getEncryptionProvider, mappings)
-  return store.get({
-    key,
-    name: 'bee',
-    encryption: getEncryptionProvider(key),
-    inflightRange: [256, 512]
-  })
+  if (key) key = mappings.resolve(key)
+  const encryption = getEncryptionProvider(key)
+
+  return key
+    ? store.get({ key, encryption, inflightRange: [256, 512] })
+    : store.get({ key, name: 'bee', encryption, inflightRange: [256, 512] })
 }
