@@ -243,8 +243,20 @@ class Hyperbee extends EventEmitter {
     return cores
   }
 
+  // a tree sitting on a core that just got mapped moves onto the mapped core
   addMappings(mappings) {
     this.context.mappings.add(mappings)
+
+    const previous = this.context
+    const mapped = previous.mappings.resolve(previous.core.key)
+    if (b4a.equals(mapped, previous.core.key)) return
+
+    this.context = previous.getContextByKey(mapped)
+
+    const root = this.root
+    if (root !== null && root !== EMPTY && root.context === previous && root.core === 0) {
+      this.root = this.context.createTreeNode(0, root.seq, 0, false, null)
+    }
   }
 
   createReadStream(options) {

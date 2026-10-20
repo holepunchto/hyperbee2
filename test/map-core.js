@@ -471,6 +471,28 @@ test('mappings - cores({ recursive: true }) walks the tables of every core reach
   await b.close()
 })
 
+test('mappings - added after open, a tree sitting on the mapped core moves onto the copy', async function (t) {
+  const store = new Corestore(await t.tmp())
+  t.teardown(() => store.close())
+
+  const a = await source(store, 50)
+  const copy = await copyCore(store, a.core, 'copy')
+
+  const b = new Bee(store.namespace('b'), { key: a.core.key, writable: false })
+  await b.ready()
+  t.alike(b.core.key, a.core.key, 'the tree sits on the original')
+  await readAll(b, 50, t, 'and reads it')
+
+  await a.core.clear(0, a.core.length)
+  b.addMappings([{ from: a.core.key, to: copy.key }])
+
+  t.alike(b.core.key, copy.key, 'the tree moved onto the copy')
+  t.alike(b.head().key, copy.key, 'with its head')
+  t.alike((await b.cores()).map(hex), [hex(copy.key)], 'and lists it')
+  await readAll(b, 50, t, 'reads go to the copy')
+  await b.close()
+})
+
 function replicateStores(a, b) {
   const s1 = a.replicate(true)
   const s2 = b.replicate(false)
