@@ -2,6 +2,7 @@ const test = require('brittle')
 const b4a = require('b4a')
 const Corestore = require('corestore')
 const Bee = require('../')
+const { encodeBlock, decodeBlock } = require('../lib/encoding.js')
 const { create, replicate } = require('./helpers')
 
 test('offline reader can move to cached checkpoint after learning a newer length', async function (t) {
@@ -159,5 +160,98 @@ function replicateManual(a, b) {
     s2.destroy()
     await closed1
     await closed2
+  }
+}
+
+test('invalidation pointer forces a core table reload', async function (t) {
+  const db = await create(t)
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('a'), b4a.from('1'))
+    await w.flush()
+  }
+
+  const context = db.context
+  const config = db.config
+
+  await context.update(config)
+
+  const length = context.length
+
+  t.is(context.invalidation, 0)
+  t.is(context.cores.length, 0)
+
+  const cores = [{ key: b4a.alloc(32, 1), fork: 0, length: 0, treeHash: null }]
+
+  // newer core table, but no invalidation pointer: the loaded table is kept
+  await db.core.append(encodeBlock(metadataBlock(length + 1, cores, 0)))
+  await context.getBlock(length, 0, config, null)
+
+  t.is(context.cores.length, 0, 'no reload without an invalidation pointer')
+  t.is(context.length, length)
+
+  // invalidation pointer newer than the one the table was loaded with: reload
+  await db.core.append(encodeBlock(metadataBlock(length + 2, cores, length + 2)))
+  await context.getBlock(length + 1, 0, config, null)
+
+  t.is(context.invalidation, length + 2)
+  t.is(context.length, length + 2)
+  t.alike(context.cores, cores, 'table reloaded from the invalidating block')
+
+  // invalidation pointer equal to the last one seen: no reload
+  await db.core.append(encodeBlock(metadataBlock(length + 3, [], length + 2)))
+  await context.getBlock(length + 2, 0, config, null)
+
+  t.is(context.invalidation, length + 2)
+  t.is(context.length, length + 2)
+  t.alike(context.cores, cores, 'table kept')
+
+  // rereading the invalidating block is a noop
+  await context.getBlock(length + 1, 0, config, null)
+
+  t.is(context.length, length + 2)
+  t.alike(context.cores, cores)
+})
+
+test('new blocks carry the invalidation pointer forward', async function (t) {
+  const db = await create(t)
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('a'), b4a.from('1'))
+    await w.flush()
+  }
+
+  await db.context.update(db.config)
+
+  const length = db.context.length
+  const cores = db.context.cores
+
+  await db.core.append(encodeBlock(metadataBlock(length + 1, cores, length + 1)))
+
+  {
+    const w = db.write()
+    w.tryPut(b4a.from('b'), b4a.from('2'))
+    await w.flush()
+  }
+
+  const head = decodeBlock(await db.core.get(db.core.length - 1), db.core.length - 1)
+
+  t.is(head.invalidation, length + 1)
+  t.alike((await db.get(b4a.from('b'))).value, b4a.from('2'))
+})
+
+function metadataBlock(checkpoint, cores, invalidation) {
+  return {
+    type: 1,
+    checkpoint,
+    batch: { start: 0, end: 0 },
+    previous: null,
+    metadata: { cores },
+    tree: null,
+    keys: null,
+    values: null,
+    cohorts: null,
+    t: 0,
+    invalidation
   }
 }

@@ -404,6 +404,11 @@
           "name": "t",
           "type": "uint",
           "version": 1
+        },
+        {
+          "name": "invalidation",
+          "type": "uint",
+          "version": 1
         }
       ]
     }

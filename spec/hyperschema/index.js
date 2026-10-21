@@ -450,10 +450,20 @@ const encoding14_9 = c.array(encoding3)
 // @bee/block-1
 const encoding14 = {
   preencode(state, m) {
+    const flags =
+      (m.previous ? 1 : 0) |
+      (m.metadata ? 2 : 0) |
+      (m.tree ? 4 : 0) |
+      (m.keys ? 8 : 0) |
+      (m.values ? 16 : 0) |
+      (m.cohorts ? 32 : 0) |
+      (m.t ? 64 : 0) |
+      (m.invalidation ? 128 : 0)
+
     c.uint.preencode(state, m.type)
     c.uint.preencode(state, m.checkpoint)
     encoding6.preencode(state, m.batch)
-    state.end++ // max flag is 64 so always one byte
+    c.uint.preencode(state, flags)
 
     if (m.previous) encoding5.preencode(state, m.previous)
     if (m.metadata) encoding14_5.preencode(state, m.metadata)
@@ -462,6 +472,7 @@ const encoding14 = {
     if (m.values) encoding14_8.preencode(state, m.values)
     if (m.cohorts) encoding14_9.preencode(state, m.cohorts)
     if (m.t) c.uint.preencode(state, m.t)
+    if (m.invalidation) c.uint.preencode(state, m.invalidation)
   },
   encode(state, m) {
     const flags =
@@ -471,7 +482,8 @@ const encoding14 = {
       (m.keys ? 8 : 0) |
       (m.values ? 16 : 0) |
       (m.cohorts ? 32 : 0) |
-      (m.t ? 64 : 0)
+      (m.t ? 64 : 0) |
+      (m.invalidation ? 128 : 0)
 
     c.uint.encode(state, m.type)
     c.uint.encode(state, m.checkpoint)
@@ -485,6 +497,7 @@ const encoding14 = {
     if (m.values) encoding14_8.encode(state, m.values)
     if (m.cohorts) encoding14_9.encode(state, m.cohorts)
     if (m.t) c.uint.encode(state, m.t)
+    if (m.invalidation) c.uint.encode(state, m.invalidation)
   },
   decode(state) {
     const r0 = c.uint.decode(state)
@@ -503,7 +516,8 @@ const encoding14 = {
       keys: (flags & 8) !== 0 ? encoding14_7.decode(state) : null,
       values: (flags & 16) !== 0 ? encoding14_8.decode(state) : null,
       cohorts: (flags & 32) !== 0 ? encoding14_9.decode(state) : null,
-      t: (flags & 64) !== 0 ? c.uint.decode(state) : 0
+      t: (flags & 64) !== 0 ? c.uint.decode(state) : 0,
+      invalidation: (flags & 128) !== 0 ? c.uint.decode(state) : 0
     }
   }
 }
