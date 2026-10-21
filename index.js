@@ -199,7 +199,10 @@ class Hyperbee extends EventEmitter {
   async cores({ local = true, recursive = false, ...opts } = {}) {
     const config = this.config.options(opts)
     const node = await this.bootstrap(config)
-    if (node !== null) await node.context.getBlock(node.seq, 0, config, null)
+    if (node !== null) {
+      const block = await node.context.getBlock(node.seq, 0, config, null)
+      await node.context._inflateCheckpoint(node.seq + 1, block, config, false)
+    }
 
     const cores = []
     const seen = new Set()
