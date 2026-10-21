@@ -196,21 +196,16 @@ class Hyperbee extends EventEmitter {
     this.emit('close')
   }
 
-  async cores({ local = true, ...opts } = {}) {
+  async cores({ local = true, recursive = false, ...opts } = {}) {
     const config = this.config.options(opts)
     await this.ready()
-    await this.context.update(config)
 
-    const cores = []
+    const keys = recursive
+      ? (await this.context.getAllContexts(config)).map((c) => c.core.key)
+      : await this.context.getCoreKeys(config)
 
-    // index 0 is the core this bee is viewing, the rest are referenced cores
-    for (let i = 0; i <= this.context.cores.length; i++) {
-      const key = this.context.getCoreKey(i)
-      if (!local && b4a.equals(key, this.context.local.key)) continue
-      cores.push(key)
-    }
-
-    return cores
+    if (local) return keys
+    return keys.filter((k) => !b4a.equals(k, this.context.local.key))
   }
 
   createReadStream(options) {
@@ -339,6 +334,8 @@ class Hyperbee extends EventEmitter {
   }
 
   _setRoot(root, emit) {
+    if (root !== null && root !== EMPTY) this.context = root.context
+
     if (root === null || !root.equivalentTo(this.root)) {
       this.root = root
       if (emit) this.emit('update')

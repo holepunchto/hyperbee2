@@ -65,7 +65,8 @@ Options include:
 }
 ```
 
-If you pass your own `core`, consider increasing the inflight range on it (`256` minimum recommended, e.g. `{ inflightRange: [256, 512] }` when creating the core via Corestore) to match `hyperbee2` constructed cores.
+Mappings are persisted next to the core table on the next write, so readers
+that open the tree later resolve them without being given them.
 
 #### `await db.ready()`
 
@@ -128,6 +129,24 @@ Read only. Boolean indicating whether the [Corestore][corestore] has closed.
 
 Calls `replicate` on underlying [Corestore][corestore].
 
+#### `await db.cores([options])`
+
+The keys of the cores the tree reads from, mapped: the core the root lives on
+first, then the cores it references. Options:
+
+```js
+{
+  local: true,       // Boolean. Include the local core
+  recursive: false,  // Boolean. Also walk the core tables of every core reached
+  timeout: ...,      // Number. Timeout for the checkpoint reads
+  wait: ...          // Boolean. Wait for checkpoint blocks to download
+}
+```
+
+With `recursive` the result covers everything the tree can reach through core
+tables, one checkpoint read per core. It is a superset of what the current
+root references, as tables only ever grow.
+
 #### `db.checkout([options])`
 
 Returns a new Hyperbee as a view on the underlying [Hypercore][hypercore].
@@ -158,6 +177,8 @@ Options:
   key: null,                 // Buffer or null. Key of the Hypercore
 }
 ```
+
+If `key` is mapped the core it maps to is opened instead.
 
 #### `db.snapshot([options])`
 
@@ -202,6 +223,9 @@ Options:
   key: null,                      // Buffer or null. Key of the Hypercore.
   autoUpdate: true,               // Boolean .Should Hyperbee automatically reflect updates
                                   // after each flush()?
+  mappings: null,                // [{ from, to }]. Read core `from` as core `to`, which holds the
+                                  // same blocks, and write them into this checkpoint, even with
+                                  // nothing else to write. Readers of the tree learn them from it
   compat: false,                  // Boolean. Write blocks compatible with Hyperbee 1?
   type: encoding.TYPE_LATEST,     // Number. Block format to use.
   inlineValueSize: 1024,          // Values smaller than this byte length are
