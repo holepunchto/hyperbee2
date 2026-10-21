@@ -62,7 +62,6 @@ Options include:
   autoUpdate: false,       // Reload root node when underlying Hypercore is appended to?
   preload: null,           // A function called by ready() after the Hypercore is ready. Can be async.
   wait: true,              // Wait for Hypercore to download blocks
-  mappings: null,          // [{ from, to }]. Read core `from` as core `to`, which holds the same blocks
 }
 ```
 
@@ -148,13 +147,6 @@ With `recursive` the result covers everything the tree can reach through core
 tables, one checkpoint read per core. It is a superset of what the current
 root references, as tables only ever grow.
 
-#### `await db.flushMappings(mappings)`
-
-Load `[{ from, to }]` mappings, first reading those the tree already holds in
-its checkpoint, so a following batch only writes what is new. Cores already
-opened as `from` are reopened as `to` on their next use, and a tree sitting on
-a mapped core moves onto the mapped one.
-
 #### `db.checkout([options])`
 
 Returns a new Hyperbee as a view on the underlying [Hypercore][hypercore].
@@ -231,8 +223,9 @@ Options:
   key: null,                      // Buffer or null. Key of the Hypercore.
   autoUpdate: true,               // Boolean .Should Hyperbee automatically reflect updates
                                   // after each flush()?
-  touch: false,                   // Boolean. Write a checkpoint holding the mappings even if
-                                  // nothing changed, unless they are in one already
+  mappings: null,                // [{ from, to }]. Read core `from` as core `to`, which holds the
+                                  // same blocks, and write them into this checkpoint, even with
+                                  // nothing else to write. Readers of the tree learn them from it
   compat: false,                  // Boolean. Write blocks compatible with Hyperbee 1?
   type: encoding.TYPE_LATEST,     // Number. Block format to use.
   inlineValueSize: 1024,          // Values smaller than this byte length are

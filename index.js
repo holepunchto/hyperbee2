@@ -8,7 +8,6 @@ const NodeCache = require('./lib/cache.js')
 const WriteBatch = require('./lib/write.js')
 const copyChanges = require('./lib/copy.js')
 const CoreContext = require('./lib/context.js')
-const Mappings = require('./lib/mappings.js')
 const SessionConfig = require('./lib/session-config.js')
 const Downloader = require('./lib/download.js')
 const { inflate, inflateValue } = require('./lib/inflate.js')
@@ -29,16 +28,13 @@ class Hyperbee extends EventEmitter {
       timeout = config.timeout,
       wait = config.wait,
       trace = config.trace,
-      mappings = null,
-      mappingTable = new Mappings(mappings),
-      core = getRootCore(store, key, getEncryptionProvider, mappingTable),
+      core = getRootCore(store, key, getEncryptionProvider),
       context = new CoreContext(
         store,
         core,
         new NodeCache(maxCacheSize),
         core,
-        getEncryptionProvider,
-        mappingTable
+        getEncryptionProvider
       ),
       root = null,
       view = false,
@@ -200,8 +196,6 @@ class Hyperbee extends EventEmitter {
     this.emit('close')
   }
 
-  // the cores the tree reads from, mapped. Recursive walks the core tables of
-  // every core reached, so it covers what the tree can reach through them
   async cores({ local = true, recursive = false, ...opts } = {}) {
     const config = this.config.options(opts)
     const node = await this.bootstrap(config)
@@ -234,25 +228,6 @@ class Hyperbee extends EventEmitter {
     }
 
     return cores
-  }
-
-  // loads the mappings, once those the tree already holds in its checkpoint
-  // are known, so only what is new is written by the next batch. A tree
-  // sitting on a core that just got mapped moves onto the mapped core
-  async flushMappings(mappings) {
-    await this.bootstrap(this.config)
-    this.context.mappings.add(mappings)
-
-    const previous = this.context
-    const mapped = previous.mappings.resolve(previous.core.key)
-    if (b4a.equals(mapped, previous.core.key)) return
-
-    this.context = previous.getContextByKey(mapped)
-
-    const root = this.root
-    if (root !== null && root !== EMPTY && root.context === previous && root.core === 0) {
-      this.root = this.context.createTreeNode(0, root.seq, 0, false, null)
-    }
   }
 
   createReadStream(options) {
@@ -347,9 +322,6 @@ class Hyperbee extends EventEmitter {
     }
   }
 
-  // the table and mappings of a root come from the checkpoint its own block
-  // names, so nothing recorded up to the root is missed by a read that meets
-  // an older block first
   async bootstrap(config) {
     if (!this.root) await this.ready()
     if (this.unbatch) await this._rollback(config)
@@ -441,8 +413,7 @@ function toEncryptionProvider(encryption) {
   return () => null
 }
 
-function getRootCore(store, key, getEncryptionProvider, mappings) {
-  if (key) key = mappings.resolve(key)
+function getRootCore(store, key, getEncryptionProvider) {
   const encryption = getEncryptionProvider(key)
 
   return key
