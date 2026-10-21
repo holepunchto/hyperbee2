@@ -428,7 +428,7 @@ const encoding13 = {
     if (version >= 2 && m.mappings) encoding13_1.preencode(state, m.mappings)
   },
   encode(state, m) {
-    const flags = (version >= 2 && m.mappings) ? 1 : 0
+    const flags = version >= 2 && m.mappings ? 1 : 0
 
     encoding13_0.encode(state, m.cores)
     c.uint.encode(state, flags)
@@ -441,7 +441,7 @@ const encoding13 = {
 
     return {
       cores: r0,
-      mappings: (version >= 2 && (flags & 1) !== 0) ? encoding13_1.decode(state) : null
+      mappings: version >= 2 && (flags & 1) !== 0 ? encoding13_1.decode(state) : null
     }
   }
 }
