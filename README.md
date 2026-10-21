@@ -148,17 +148,12 @@ With `recursive` the result covers everything the tree can reach through core
 tables, one checkpoint read per core. It is a superset of what the current
 root references, as tables only ever grow.
 
-#### `db.addMappings(mappings)`
-
-Add `[{ from, to }]` mappings after open. Cores already opened as `from` are
-reopened as `to` on their next use. They are persisted with the core table on
-the next write.
-
 #### `await db.flushMappings(mappings)`
 
-Add the mappings and, on a writable tree, write them into a checkpoint right
-away, so a reader of the head gets them with the table. Writes one block
-holding the root as it is; writes nothing if every mapping was known.
+Load `[{ from, to }]` mappings, first reading those the tree already holds in
+its checkpoint, so a following batch only writes what is new. Cores already
+opened as `from` are reopened as `to` on their next use, and a tree sitting on
+a mapped core moves onto the mapped one.
 
 #### `db.checkout([options])`
 
@@ -236,6 +231,8 @@ Options:
   key: null,                      // Buffer or null. Key of the Hypercore.
   autoUpdate: true,               // Boolean .Should Hyperbee automatically reflect updates
                                   // after each flush()?
+  touch: false,                   // Boolean. Write a checkpoint holding the mappings even if
+                                  // nothing changed, unless they are in one already
   compat: false,                  // Boolean. Write blocks compatible with Hyperbee 1?
   type: encoding.TYPE_LATEST,     // Number. Block format to use.
   inlineValueSize: 1024,          // Values smaller than this byte length are

@@ -391,7 +391,7 @@ test('mappings - added after open, a read in flight survives its core being rema
   const stale = reader.context.opened[0]
   t.alike(stale.key, a.core.key, 'the read opened the core as referenced')
 
-  reader.addMappings([{ from: a.core.key, to: copy.key }])
+  await reader.flushMappings([{ from: a.core.key, to: copy.key }])
   const hc = reader.context.getCore(1)
   t.alike(hc.key, copy.key, 'the next open resolves to the mapped core')
   t.absent(stale.closing, 'the superseded session is left to the reads holding it')
@@ -454,7 +454,7 @@ test('mappings - cores({ recursive: true }) walks the tables of every core reach
   // the flow of a migration: find what is reachable, copy it, map it in one go
   const copy = await copyCore(store, a.core, 'copy')
   await a.core.clear(0, a.core.length)
-  c.addMappings([{ from: a.core.key, to: copy.key }])
+  await c.flushMappings([{ from: a.core.key, to: copy.key }])
 
   t.alike(
     (await c.cores({ local: false, recursive: true })).map(hex).sort(),
@@ -484,7 +484,7 @@ test('mappings - added after open, a tree sitting on the mapped core moves onto 
   await readAll(b, 50, t, 'and reads it')
 
   await a.core.clear(0, a.core.length)
-  b.addMappings([{ from: a.core.key, to: copy.key }])
+  await b.flushMappings([{ from: a.core.key, to: copy.key }])
 
   t.alike(b.core.key, copy.key, 'the tree moved onto the copy')
   t.alike(b.head().key, copy.key, 'with its head')
@@ -518,7 +518,7 @@ test('mappings - cores({ recursive: true }) does not descend into a core that is
   await b.close()
 })
 
-test('mappings - flushMappings writes them into a checkpoint right away', async function (t) {
+test('mappings - a touch writes the mappings loaded into a checkpoint', async function (t) {
   const store = new Corestore(await t.tmp())
   t.teardown(() => store.close())
 
@@ -537,10 +537,15 @@ test('mappings - flushMappings writes them into a checkpoint right away', async 
 
   const copy = await copyCore(store, a.core, 'copy')
   await w.flushMappings([{ from: a.core.key, to: copy.key }])
+  t.is(local.length, length, 'loading writes nothing')
 
-  t.is(local.length, length + 1, 'one block was written')
+  await w.write({ touch: true }).flush()
+  t.is(local.length, length + 1, 'a touch writes one block')
   t.alike(w.head(), { key: local.key, length: local.length }, 'the head moved onto it')
   await readAll(w, 51, t, 'the tree reads as before')
+
+  await w.write({ touch: true }).flush()
+  t.is(local.length, length + 1, 'a touch with nothing new writes nothing')
   await w.close()
 
   await a.core.clear(0, a.core.length)
@@ -548,17 +553,39 @@ test('mappings - flushMappings writes them into a checkpoint right away', async 
   // a reader of the head gets the mappings with the table, nothing else needed
   const again = new Bee(store.namespace('w'))
   await again.ready()
-  t.alike(again.head().length, length + 1)
   await readAll(again, 51, t, 'a reader without the mappings reads through the checkpoint')
   t.alike((await again.cores({ local: false })).map(hex), [hex(copy.key)])
-  await again.close()
 
-  // nothing new to record, nothing written
-  const idle = new Bee(store.namespace('w'))
-  await idle.ready()
-  await idle.flushMappings([{ from: a.core.key, to: copy.key }])
-  t.is(idle.context.local.length, length + 1, 'known mappings write nothing')
-  await idle.close()
+  // nor does loading what the checkpoint already holds make a touch write
+  await again.flushMappings([{ from: a.core.key, to: copy.key }])
+  await again.write({ touch: true }).flush()
+  t.is(again.context.local.length, length + 1, 'known mappings write nothing')
+  await again.close()
+})
+
+test('mappings - cores({ recursive: true }) does not descend into a core that is not a tree', async function (t) {
+  const store = new Corestore(await t.tmp())
+  t.teardown(() => store.close())
+
+  const a = await source(store, 50)
+
+  const other = store.get({ name: 'other' })
+  await other.append([b4a.from('not a tree block'), b4a.from('nor this')])
+
+  // a table entry for the foreign core, as a reference into it would leave
+  const b = new Bee(store.namespace('b'))
+  await b.ready()
+  await b.context.getLocalContext().getCoreOffsetByKey(other.key, b.config)
+  const batch = b.write()
+  batch.tryPut(key(0), value(0))
+  await batch.flush()
+
+  const direct = (await b.cores({ local: false })).map(hex)
+  t.alike(direct, [hex(other.key)], 'the foreign core is listed')
+  t.alike((await b.cores({ local: false, recursive: true })).map(hex), direct, 'and walked past')
+
+  await a.close()
+  await b.close()
 })
 
 test('mappings - cores({ recursive: true }) does not descend into a core that is not a tree', async function (t) {

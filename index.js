@@ -238,20 +238,11 @@ class Hyperbee extends EventEmitter {
     return cores
   }
 
-  // the mappings are written into a checkpoint right away, so a reader of
-  // this tree gets them with the table even before anything else is written
+  // loads the mappings, once those the tree already holds in its checkpoint
+  // are known, so only what is new is written by the next batch. A tree
+  // sitting on a core that just got mapped moves onto the mapped core
   async flushMappings(mappings) {
     await this.bootstrap(this.config)
-    this.addMappings(mappings)
-    if (!this.writable || !this.context.mappings.dirty) return
-
-    const batch = this.write()
-    batch.touch = true
-    await batch.flush()
-  }
-
-  // a tree sitting on a core that just got mapped moves onto the mapped core
-  addMappings(mappings) {
     this.context.mappings.add(mappings)
 
     const previous = this.context
