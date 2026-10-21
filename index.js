@@ -198,16 +198,11 @@ class Hyperbee extends EventEmitter {
 
   async cores({ local = true, recursive = false, ...opts } = {}) {
     const config = this.config.options(opts)
-    const node = await this.bootstrap(config)
-    const root = node === null ? this.context : node.context
+    await this.ready()
 
-    if (node !== null) {
-      const block = await root.getBlock(node.seq, 0, config, null)
-      await root._inflateCheckpoint(node.seq + 1, block, config, false)
-    }
-
-    const contexts = recursive ? await root.getAllContexts(config) : null
-    const keys = recursive ? contexts.map((c) => c.core.key) : root.getCoreKeys()
+    const keys = recursive
+      ? (await this.context.getAllContexts(config)).map((c) => c.core.key)
+      : await this.context.getCoreKeys(config)
 
     if (local) return keys
     return keys.filter((k) => !b4a.equals(k, this.context.local.key))
