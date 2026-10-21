@@ -361,28 +361,6 @@ test('mappings - cores({ recursive: true }) walks the tables of every core reach
   await b.close()
 })
 
-test('mappings - cores({ recursive: true }) does not descend into a core that is not a tree', async function (t) {
-  const store = new Corestore(await t.tmp())
-  t.teardown(() => store.close())
-
-  const other = store.get({ name: 'other' })
-  await other.append([b4a.from('not a tree block'), b4a.from('nor this')])
-
-  // a table entry for the foreign core, as a reference into it would leave
-  const b = new Bee(store.namespace('b'))
-  await b.ready()
-  await b.context.getLocalContext().getCoreOffsetByKey(other.key, b.config)
-  const batch = b.write()
-  batch.tryPut(key(0), value(0))
-  await batch.flush()
-
-  const direct = (await b.cores({ local: false })).map(hex)
-  t.alike(direct, [hex(other.key)], 'the foreign core is listed')
-  t.alike((await b.cores({ local: false, recursive: true })).map(hex), direct, 'and walked past')
-
-  await b.close()
-})
-
 function replicateStores(a, b) {
   const s1 = a.replicate(true)
   const s2 = b.replicate(false)

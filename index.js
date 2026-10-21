@@ -212,11 +212,7 @@ class Hyperbee extends EventEmitter {
     while (queue.length > 0) {
       const context = queue.shift()
 
-      // a referenced core that is not a tree is a leaf
-      if (context !== root) {
-        if (!(await context.isTree(config))) continue
-        await context.update(config)
-      }
+      if (context !== root) await context.update(config)
 
       // index 0 is the core this context is viewing, the rest are referenced cores
       for (let i = 0; i <= context.cores.length; i++) {
