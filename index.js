@@ -199,35 +199,18 @@ class Hyperbee extends EventEmitter {
   async cores({ local = true, recursive = false, ...opts } = {}) {
     const config = this.config.options(opts)
     const node = await this.bootstrap(config)
-    if (node !== null) {
-      const block = await node.context.getBlock(node.seq, 0, config, null)
-      await node.context._inflateCheckpoint(node.seq + 1, block, config, false)
-    }
-
-    const cores = []
-    const seen = new Set()
     const root = node === null ? this.context : node.context
-    const queue = [root]
 
-    while (queue.length > 0) {
-      const context = queue.shift()
-
-      if (context !== root) await context.update(config)
-
-      // index 0 is the core this context is viewing, the rest are referenced cores
-      for (let i = 0; i <= context.cores.length; i++) {
-        const key = context.getCoreKey(i)
-        const hex = b4a.toString(key, 'hex')
-        if (seen.has(hex)) continue
-        seen.add(hex)
-
-        if (recursive && i > 0) queue.push(await context.getContext(i, config, null))
-        if (!local && b4a.equals(key, this.context.local.key)) continue
-        cores.push(key)
-      }
+    if (node !== null) {
+      const block = await root.getBlock(node.seq, 0, config, null)
+      await root._inflateCheckpoint(node.seq + 1, block, config, false)
     }
 
-    return cores
+    const contexts = recursive ? await root.getAllContexts(config) : null
+    const keys = recursive ? contexts.map((c) => c.core.key) : root.getCoreKeys()
+
+    if (local) return keys
+    return keys.filter((k) => !b4a.equals(k, this.context.local.key))
   }
 
   createReadStream(options) {
