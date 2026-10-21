@@ -339,6 +339,10 @@ bee.register({
     {
       name: 't',
       type: 'uint'
+    },
+    {
+      name: 'invalidation', // TODO: in future block-2 should be required
+      type: 'uint'
     }
   ]
 })
