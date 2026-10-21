@@ -62,7 +62,7 @@ Options include:
   autoUpdate: false,       // Reload root node when underlying Hypercore is appended to?
   preload: null,           // A function called by ready() after the Hypercore is ready. Can be async.
   wait: true,              // Wait for Hypercore to download blocks
-  mappings: null,          // [{ from, to }] or a Hyperbee.Mappings to share between trees. Read core `from` as core `to`, which holds the same blocks
+  mappings: null,          // [{ from, to }]. Read core `from` as core `to`, which holds the same blocks
 }
 ```
 
@@ -151,7 +151,14 @@ root references, as tables only ever grow.
 #### `db.addMappings(mappings)`
 
 Add `[{ from, to }]` mappings after open. Cores already opened as `from` are
-reopened as `to` on their next use.
+reopened as `to` on their next use. They are persisted with the core table on
+the next write.
+
+#### `await db.flushMappings(mappings)`
+
+Add the mappings and, on a writable tree, write them into a checkpoint right
+away, so a reader of the head gets them with the table. Writes one block
+holding the root as it is; writes nothing if every mapping was known.
 
 #### `db.checkout([options])`
 

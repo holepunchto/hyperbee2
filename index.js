@@ -30,7 +30,7 @@ class Hyperbee extends EventEmitter {
       wait = config.wait,
       trace = config.trace,
       mappings = null,
-      mappingTable = mappings instanceof Mappings ? mappings : new Mappings(mappings),
+      mappingTable = new Mappings(mappings),
       core = getRootCore(store, key, getEncryptionProvider, mappingTable),
       context = new CoreContext(
         store,
@@ -65,10 +65,6 @@ class Hyperbee extends EventEmitter {
 
   static isHyperbee(bee) {
     return bee instanceof Hyperbee
-  }
-
-  static get Mappings() {
-    return Mappings
   }
 
   isGenesis() {
@@ -180,24 +176,11 @@ class Hyperbee extends EventEmitter {
     return seq < 0 ? EMPTY : this.context.createTreeNode(0, seq, 0, false, null)
   }
 
-  // the latest table and mappings of a core are picked up when its tip is
-  // local, never waiting on a peer for them
-  async _updateLocal() {
-    try {
-      await this.context.update(this.config.options({ wait: false }))
-    } catch (err) {
-      if (err.code !== 'BLOCK_NOT_AVAILABLE') throw err
-    }
-  }
-
   async ready() {
     if (!this.core.opened) await this.core.ready()
 
     if (this.root) return
     if (this.preload) await this.preload()
-    if (this.root) return
-
-    await this._updateLocal()
     if (this.root) return
 
     this._setRoot(this._lastNodeInCore(), false)
@@ -221,19 +204,12 @@ class Hyperbee extends EventEmitter {
   // every core reached, so it covers what the tree can reach through them
   async cores({ local = true, recursive = false, ...opts } = {}) {
     const config = this.config.options(opts)
-    await this.ready()
+    const node = await this.bootstrap(config)
 
     const cores = []
     const seen = new Set()
-    const root = this.root && this.root !== EMPTY ? this.root.context : this.context
+    const root = node === null ? this.context : node.context
     const queue = [root]
-
-    // the table of the root resolves from the block the root lives in, as a
-    // read would, never from the tip of its core
-    if (root === this.root.context) {
-      const block = await root.getBlock(this.root.seq, 0, config, null)
-      await root._inflateCheckpoint(this.root.seq + 1, block, config, false)
-    }
 
     while (queue.length > 0) {
       const context = queue.shift()
@@ -260,6 +236,18 @@ class Hyperbee extends EventEmitter {
     }
 
     return cores
+  }
+
+  // the mappings are written into a checkpoint right away, so a reader of
+  // this tree gets them with the table even before anything else is written
+  async flushMappings(mappings) {
+    await this.bootstrap(this.config)
+    this.addMappings(mappings)
+    if (!this.writable || !this.context.mappings.dirty) return
+
+    const batch = this.write()
+    batch.touch = true
+    await batch.flush()
   }
 
   // a tree sitting on a core that just got mapped moves onto the mapped core
@@ -370,10 +358,21 @@ class Hyperbee extends EventEmitter {
     }
   }
 
+  // the table and mappings of a root come from the checkpoint its own block
+  // names, so nothing recorded up to the root is missed by a read that meets
+  // an older block first
   async bootstrap(config) {
     if (!this.root) await this.ready()
     if (this.unbatch) await this._rollback(config)
-    return this.root === EMPTY ? null : this.root
+    if (this.root === EMPTY) return null
+
+    const root = this.root
+    if (root.context.length < root.seq + 1) {
+      const block = await root.context.getBlock(root.seq, 0, config, null)
+      await root.context._inflateCheckpoint(root.seq + 1, block, config, false)
+    }
+
+    return root
   }
 
   async _rollback(config) {
