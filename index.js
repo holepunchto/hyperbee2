@@ -199,6 +199,7 @@ class Hyperbee extends EventEmitter {
   async cores({ local = true, recursive = false, ...opts } = {}) {
     const config = this.config.options(opts)
     const node = await this.bootstrap(config)
+    if (node !== null) await node.context.getBlock(node.seq, 0, config, null)
 
     const cores = []
     const seen = new Set()
@@ -325,15 +326,7 @@ class Hyperbee extends EventEmitter {
   async bootstrap(config) {
     if (!this.root) await this.ready()
     if (this.unbatch) await this._rollback(config)
-    if (this.root === EMPTY) return null
-
-    const root = this.root
-    if (root.context.length < root.seq + 1) {
-      const block = await root.context.getBlock(root.seq, 0, config, null)
-      await root.context._inflateCheckpoint(root.seq + 1, block, config, false)
-    }
-
-    return root
+    return this.root === EMPTY ? null : this.root
   }
 
   async _rollback(config) {
