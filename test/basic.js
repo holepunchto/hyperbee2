@@ -698,7 +698,8 @@ test('reindex preserves batches across splits, value blocks and cores', async fu
   t.is(remote.length, 5)
 
   const source = b.head()
-  t.absent(b4a.equals(source.key, b.core.key), 'b is viewing c, its writes live in its local core')
+  t.alike(source.key, b.context.local.key, 'b built on c, its writes live in its local core')
+  t.absent(b4a.equals(source.key, genesis.key))
 
   // stop at c's change, so the copies keep pointing into c's core for untouched nodes
   a.move(source)

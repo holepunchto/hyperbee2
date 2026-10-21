@@ -339,6 +339,8 @@ class Hyperbee extends EventEmitter {
   }
 
   _setRoot(root, emit) {
+    if (root !== null && root !== EMPTY) this.context = root.context
+
     if (root === null || !root.equivalentTo(this.root)) {
       this.root = root
       if (emit) this.emit('update')
