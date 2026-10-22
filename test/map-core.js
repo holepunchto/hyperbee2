@@ -361,6 +361,44 @@ test('mappings - cores({ recursive: true }) walks the tables of every core reach
   await b.close()
 })
 
+test('mappings - the core table keeps the keys as they were before the mapping', async function (t) {
+  const store = new Corestore(await t.tmp())
+  t.teardown(() => store.close())
+
+  const { a, w, copy, mappings } = await setup(store)
+  await w.write({ mappings }).flush()
+
+  // the tree moves onto the original, so it now reads through the copy
+  w.move({ key: a.core.key, length: a.core.length })
+  t.alike(w.core.key, copy.key, 'the tree sits on the copy')
+
+  const batch = w.write()
+  batch.tryPut(key(60), value(60))
+  await batch.flush()
+
+  const table = (keys) => keys.map(hex)
+  const local = w.context.getLocalContext()
+  t.ok(
+    table(local.cores.map((c) => c.key)).includes(hex(a.core.key)),
+    'the original is in the table'
+  )
+  t.absent(table(local.cores.map((c) => c.key)).includes(hex(copy.key)), 'the copy never is')
+  await w.close()
+
+  await a.core.clear(0, a.core.length)
+
+  const r = new Bee(store.namespace('w'), { writable: false })
+  await r.ready()
+  await r.cores()
+  t.absent(
+    table(r.context.cores.map((c) => c.key)).includes(hex(copy.key)),
+    'nor in the checkpoint written'
+  )
+  t.alike((await r.get(key(60))).value, value(60))
+  await readAll(r, 50, t, 'and every entry of the original reads through the mapping')
+  await r.close()
+})
+
 function replicateStores(a, b) {
   const s1 = a.replicate(true)
   const s2 = b.replicate(false)
