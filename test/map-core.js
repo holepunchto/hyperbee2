@@ -276,7 +276,11 @@ test('mappings - a read in flight survives its core being remapped', async funct
   await reader.ready()
 
   const read = reader.get(key(0))
-  for (let i = 0; i < 100 && !reader.context.opened[0]; i++) await immediate()
+  const deadline = Date.now() + 5000
+  while (!reader.context.opened[0]) {
+    if (Date.now() > deadline) return t.fail('the read never opened the referenced core')
+    await immediate()
+  }
   const stale = reader.context.opened[0]
   t.alike(stale.key, a.core.key, 'the read opened the core as referenced')
 
