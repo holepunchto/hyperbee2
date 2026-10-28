@@ -281,16 +281,10 @@ class Hyperbee extends EventEmitter {
   }
 
   async inflate(ptr, config) {
-    // Store the value (cached or inflated) as a local scope variable so if
-    // `.bump()` gc's it (due to async microtask queue) it can still be returned
+    // `.bump()` can gc the value so return the value directly
     const value = ptr.value || (await inflate(ptr, config))
-    if (!ptr.value) {
-      ptr.value = value
-      ptr.inflating = null
-    }
-
     this.bump(ptr)
-    return ptr.value || value
+    return value
   }
 
   async finalizeKeyPointer(key, config) {
