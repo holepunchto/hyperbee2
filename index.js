@@ -281,8 +281,9 @@ class Hyperbee extends EventEmitter {
   }
 
   async inflate(ptr, config) {
-    // `.bump()` can gc the value so return the value directly
     const value = ptr.value || (await inflate(ptr, config))
+    // evicted between the inner inflate and here, put it back before bumping
+    if (ptr.value === null) ptr.value = value
     this.bump(ptr)
     return value
   }
