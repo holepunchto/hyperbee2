@@ -284,7 +284,10 @@ class Hyperbee extends EventEmitter {
     // Store the value (cached or inflated) as a local scope variable so if
     // `.bump()` gc's it (due to async microtask queue) it can still be returned
     const value = ptr.value || (await inflate(ptr, config))
-    if (!ptr.value) ptr.value = value
+    if (!ptr.value) {
+      ptr.value = value
+      ptr.inflating = null
+    }
 
     this.bump(ptr)
     return ptr.value || value
