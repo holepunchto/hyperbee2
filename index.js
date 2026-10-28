@@ -284,11 +284,10 @@ class Hyperbee extends EventEmitter {
   }
 
   async inflate(ptr, config) {
-    if (!ptr.value) {
-      await inflate(ptr, config)
-    }
+    let value = ptr.value
+    if (value === null) ptr.value = value = await inflate(ptr, config)
     this.bump(ptr)
-    return ptr.value
+    return value
   }
 
   async finalizeKeyPointer(key, config) {
