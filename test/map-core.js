@@ -8,8 +8,10 @@ const hex = (k) => b4a.toString(k, 'hex')
 const key = (i) => b4a.from('key/' + String(i).padStart(4, '0'))
 const value = (i) => b4a.from('value-' + i)
 
+const openBee = (store, opts) => new Bee(store, { mappings: true, ...opts })
+
 async function source(store, n) {
-  const a = new Bee(store.namespace('a'))
+  const a = openBee(store.namespace('a'))
   await a.ready()
   const w = a.write()
   for (let i = 0; i < n; i++) w.tryPut(key(i), value(i))
@@ -37,7 +39,7 @@ async function readAll(bee, n, t, msg) {
 async function setup(store, n = 50) {
   const a = await source(store, n)
 
-  const w = new Bee(store.namespace('w'))
+  const w = openBee(store.namespace('w'))
   await w.ready()
   w.move({ key: a.core.key, length: a.core.length })
   {
@@ -70,13 +72,13 @@ test('mappings - a write with mappings records them, readers read through them',
 
   await a.core.clear(0, a.core.length)
 
-  const r = new Bee(store.namespace('w'), { writable: false })
+  const r = openBee(store.namespace('w'), { writable: false })
   await r.ready()
   await readAll(r, 51, t, 'a reader reads through the mappings of the checkpoint')
   t.alike((await r.cores({ local: false })).map(hex), [hex(copy.key)], 'and lists the copy only')
   await r.close()
 
-  const again = new Bee(store.namespace('w'))
+  const again = openBee(store.namespace('w'))
   await again.ready()
   await again.write({ mappings }).flush()
   t.is(again.context.local.length, length + 1, 'nor after a reopen')
@@ -102,7 +104,7 @@ test('mappings - a write with ops carries the mappings in its checkpoint', async
 
   await a.core.clear(0, a.core.length)
 
-  const r = new Bee(store.namespace('w'), { writable: false })
+  const r = openBee(store.namespace('w'), { writable: false })
   await r.ready()
   await readAll(r, 52, t, 'a reader reads everything through the copy')
   t.ok((await r.cores()).some((k) => b4a.equals(k, copy.key)))
@@ -124,7 +126,7 @@ test('mappings - an undo below the record reads through the mappings of the head
 
   await a.core.clear(0, a.core.length)
 
-  const r = new Bee(store.namespace('w'), { writable: false })
+  const r = openBee(store.namespace('w'), { writable: false })
   await r.ready()
   await readAll(r, 55, t, 'the head reads through the copy')
 
@@ -146,7 +148,7 @@ test('mappings - a mapping met in another writer is recorded locally', async fun
   await a.core.clear(0, a.core.length)
 
   // c is never given the mapping and only ever sees w's head
-  const c = new Bee(store.namespace('c'))
+  const c = openBee(store.namespace('c'))
   await c.ready()
   c.move({ key: w.context.local.key, length: w.context.local.length })
   {
@@ -158,7 +160,7 @@ test('mappings - a mapping met in another writer is recorded locally', async fun
   await c.close()
   await w.close()
 
-  const again = new Bee(store.namespace('c'), { writable: false })
+  const again = openBee(store.namespace('c'), { writable: false })
   await again.ready()
   await readAll(again, 52, t, "a reopen of c reads a through c's own checkpoint")
   t.absent(
@@ -184,7 +186,7 @@ test('mappings - a remote reads the whole tree after the original data is gone',
   t.teardown(() => remote.close())
   const stop = replicateStores(origin, remote)
 
-  const reader = new Bee(remote.session(), { key: wKey, writable: false })
+  const reader = openBee(remote.session(), { key: wKey, writable: false })
   await reader.ready()
   await reader.core.update({ wait: true })
 
@@ -218,7 +220,7 @@ test('mappings - a remote reads the whole tree after the original data is gone',
     await core.close()
   }
 
-  const old = new Bee(other.session(), { key: wKey, writable: false })
+  const old = openBee(other.session(), { key: wKey, writable: false })
   await old.ready()
   old.move({ length: before })
   await t.exception(
@@ -272,7 +274,7 @@ test('mappings - a read in flight survives its core being remapped', async funct
     await stop()
   }
 
-  const reader = new Bee(remote.session(), { key: wKey, writable: false })
+  const reader = openBee(remote.session(), { key: wKey, writable: false })
   await reader.ready()
 
   const read = reader.get(key(0))
@@ -310,7 +312,7 @@ test('mappings - cores({ recursive: true }) walks the tables of every core reach
   // into a any more but b's table still names it, and c builds on b
   const a = await source(store, 50)
 
-  const b = new Bee(store.namespace('b'))
+  const b = openBee(store.namespace('b'))
   await b.ready()
   b.move({ key: a.core.key, length: a.core.length })
   {
@@ -325,7 +327,7 @@ test('mappings - cores({ recursive: true }) walks the tables of every core reach
     await batch.flush()
   }
 
-  const c = new Bee(store.namespace('c'))
+  const c = openBee(store.namespace('c'))
   await c.ready()
   c.move({ key: b.context.local.key, length: b.context.local.length })
   {
@@ -391,7 +393,7 @@ test('mappings - the core table keeps the keys as they were before the mapping',
 
   await a.core.clear(0, a.core.length)
 
-  const r = new Bee(store.namespace('w'), { writable: false })
+  const r = openBee(store.namespace('w'), { writable: false })
   await r.ready()
   await r.cores()
   t.absent(
@@ -425,3 +427,79 @@ function immediate() {
 }
 
 function noop() {}
+
+test('mappings - disabled by default, a write ignores the mappings it is given', async function (t) {
+  const store = new Corestore(await t.tmp())
+  t.teardown(() => store.close())
+
+  const { a, w, copy, mappings } = await setup(store)
+  await w.close()
+
+  const off = new Bee(store.namespace('w'))
+  await off.ready()
+  const length = off.context.local.length
+
+  await off.write({ mappings }).flush()
+  t.is(off.context.local.length, length, 'nothing to write, no block')
+
+  const batch = off.write({ mappings })
+  batch.tryPut(key(51), value(51))
+  await batch.flush()
+  t.is(off.context.local.length, length + 1, 'a write with ops still lands')
+  t.ok(
+    (await off.cores({ local: false })).some((k) => b4a.equals(k, a.core.key)),
+    'the original is still read'
+  )
+  t.absent(
+    (await off.cores({ local: false })).some((k) => b4a.equals(k, copy.key)),
+    'the copy is not'
+  )
+
+  await off.close()
+
+  await a.core.clear(0, a.core.length)
+  const r = new Bee(store.namespace('w'), { writable: false })
+  await r.ready()
+  await t.exception(
+    r.get(key(0), { wait: false }),
+    /BLOCK_NOT_AVAILABLE/,
+    'the mapping was never recorded'
+  )
+  await r.close()
+})
+
+test('mappings - disabled by default, a reader ignores the mappings in the tree', async function (t) {
+  const store = new Corestore(await t.tmp())
+  t.teardown(() => store.close())
+
+  const { a, w, copy, mappings } = await setup(store)
+  await w.write({ mappings }).flush()
+  await w.close()
+
+  const off = new Bee(store.namespace('w'), { writable: false })
+  await off.ready()
+  await readAll(off, 51, t, 'reads the original while it is there')
+  t.alike(
+    (await off.cores({ local: false })).map(hex),
+    [hex(a.core.key)],
+    'and lists the original, not the copy'
+  )
+
+  await off.close()
+
+  await a.core.clear(0, a.core.length)
+  const again = new Bee(store.namespace('w'), { writable: false })
+  await again.ready()
+  await t.exception(
+    again.get(key(0), { wait: false }),
+    /BLOCK_NOT_AVAILABLE/,
+    'the mapping is not followed'
+  )
+  await again.close()
+
+  const on = openBee(store.namespace('w'), { writable: false })
+  await on.ready()
+  await readAll(on, 51, t, 'an opted-in reader of the same tree follows it')
+  t.alike((await on.cores({ local: false })).map(hex), [hex(copy.key)])
+  await on.close()
+})
