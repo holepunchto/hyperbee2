@@ -42,11 +42,13 @@ test('close open streams when Hyperbee instance closed', async function (t) {
   const s2 = db.createDiffStream(db2)
   const s3 = db.createChangesStream()
 
-  s1.on('error', (err) => console.log('s1 error', err))
-  s2.on('error', (err) => console.log('s2 error', err))
-  s3.on('error', (err) => console.log('s4 error', err))
+  s1.on('error', noop)
+  s2.on('error', noop)
+  s3.on('error', noop)
 
-  // Read from streams so they get added to Hyperbee instance streams array
+  // Streams are registered on construction, before any read
+  t.is(db.streams.length, 3)
+
   s1.resume()
   s2.resume()
   s3.resume()
@@ -75,3 +77,18 @@ test('close open streams when Hyperbee instance closed', async function (t) {
   t.is(s2.destroyed, true)
   t.is(s3.destroyed, true)
 })
+
+test('streams created but never read are closed when Hyperbee instance closed', async function (t) {
+  const db = await createUnreachableReader(t)
+
+  const s = db.createReadStream()
+  s.on('error', noop)
+
+  t.is(db.streams.length, 1)
+
+  await db.close()
+  t.is(db.streams.length, 0)
+  t.is(s.destroyed, true)
+})
+
+function noop() {}

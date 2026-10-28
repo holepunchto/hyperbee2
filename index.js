@@ -196,12 +196,6 @@ class Hyperbee extends EventEmitter {
   }
 
   removeStream(s) {
-    if (s.index === -1) {
-      // Stream was never added to streams array.
-      // Protects against streamx calling _destory() hook without first
-      // calling _open() (because no read was ever performed on the stream).
-      return
-    }
     if (this.streams[s.index] !== s) {
       throw Error('Stream not in expected position')
     }
@@ -214,9 +208,8 @@ class Hyperbee extends EventEmitter {
   async close() {
     if (!this.root) await this.ready()
     Hypercore.destroyRequests(this.config.activeRequests, null)
-    while (this.streams.length) {
-      await this.streams[0].destroy()
-    }
+    // reverse so pop-and-swap in removeStream() is safe
+    for (let i = this.streams.length - 1; i >= 0; i--) this.streams[i].destroy()
     if (this.view) return
     if (this.store.closing) return this.store.close()
     await this.store.close()
