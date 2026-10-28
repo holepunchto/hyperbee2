@@ -62,11 +62,14 @@ Options include:
   autoUpdate: false,       // Reload root node when underlying Hypercore is appended to?
   preload: null,           // A function called by ready() after the Hypercore is ready. Can be async.
   wait: true,              // Wait for Hypercore to download blocks
+  mappings: false,         // Follow core mappings, both the ones given to write() and
+                           // the ones found in the tree. Off by default, set to true to opt in.
 }
 ```
 
 Mappings are persisted next to the core table on the next write, so readers
-that open the tree later resolve them without being given them.
+that open the tree later resolve them without being given them. They are
+opt-in: a Hyperbee only writes and reads them with `mappings: true`.
 
 #### `await db.ready()`
 
@@ -225,7 +228,8 @@ Options:
                                   // after each flush()?
   mappings: null,                // [{ from, to }]. Read core `from` as core `to`, which holds the
                                   // same blocks, and write them into this checkpoint, even with
-                                  // nothing else to write. Readers of the tree learn them from it
+                                  // nothing else to write. Readers of the tree learn them from it.
+                                  // Ignored unless the Hyperbee has `mappings: true`
   compat: false,                  // Boolean. Write blocks compatible with Hyperbee 1?
   type: encoding.TYPE_LATEST,     // Number. Block format to use.
   inlineValueSize: 1024,          // Values smaller than this byte length are

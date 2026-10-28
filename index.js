@@ -8,6 +8,7 @@ const NodeCache = require('./lib/cache.js')
 const WriteBatch = require('./lib/write.js')
 const copyChanges = require('./lib/copy.js')
 const CoreContext = require('./lib/context.js')
+const Mappings = require('./lib/mappings.js')
 const SessionConfig = require('./lib/session-config.js')
 const Downloader = require('./lib/download.js')
 const { inflate, inflateValue } = require('./lib/inflate.js')
@@ -29,12 +30,14 @@ class Hyperbee extends EventEmitter {
       wait = config.wait,
       trace = config.trace,
       core = getRootCore(store, key, getEncryptionProvider),
+      mappings = false,
       context = new CoreContext(
         store,
         core,
         new NodeCache(maxCacheSize),
         core,
-        getEncryptionProvider
+        getEncryptionProvider,
+        new Mappings({ disabled: !mappings })
       ),
       root = null,
       view = false,
