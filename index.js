@@ -282,7 +282,10 @@ class Hyperbee extends EventEmitter {
 
   async inflate(ptr, config) {
     if (!ptr.value) {
-      await inflate(ptr, config)
+      const value = await inflate(ptr, config)
+      // another caller may have inflated and cached ptr while we were resuming,
+      // and gc may have evicted it again in that window - restore what we read
+      if (!ptr.value) ptr.value = value
     }
     this.bump(ptr)
     return ptr.value
