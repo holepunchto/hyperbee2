@@ -106,6 +106,29 @@ test('a late caller reuses the first round and shares the second', async functio
   await view.close()
 })
 
+test('inflate does not return null when the cache evicts the node it just read', async function (t) {
+  // inflate() tries to cache the value on the pointer. With the cache
+  // disabled every bump evicts, so the window is hit on the very first node;
+  // with a cache it needs a concurrent inflation of the same node and is a flake.
+  const db = await create(t, { t: 3, maxCacheSize: 0 })
+
+  const entries = []
+  for (let i = 0; i < 100; i++) entries.push({ key: entriesKey(i), value: b4a.from('v' + i) })
+
+  const w = db.write()
+  for (const e of entries) w.tryPut(e.key, e.value)
+  await w.flush()
+
+  const root = await db.bootstrap(db.config)
+  t.ok(await db.inflate(root, db.config), 'inflate resolved a node')
+
+  const got = await collect(db.createReadStream())
+  t.is(got.length, entries.length, 'read stream walked the whole tree')
+
+  const hit = await db.get(entries[50].key)
+  t.alike(hit.value, entries[50].value, 'get walked down to a leaf')
+})
+
 async function createRemote(t) {
   const db = await create(t, { t: 4 })
   const entries = []
