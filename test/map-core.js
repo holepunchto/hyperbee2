@@ -503,3 +503,49 @@ test('mappings - disabled by default, a reader ignores the mappings in the tree'
   t.alike((await on.cores({ local: false })).map(hex), [hex(copy.key)])
   await on.close()
 })
+
+// a store may hand back a session that only learns its key once open, as one with a preload does
+test('two reads of a core not yet open in one tick share the session', async function (t) {
+  const dir = await t.tmp()
+  const store = new Corestore(dir)
+  const { a, w } = await setup(store)
+  await w.write().flush()
+  const head = { key: w.context.local.key, length: w.context.local.length }
+  await w.close()
+  await a.close()
+  await store.close()
+
+  const cold = new Corestore(dir)
+  t.teardown(() => cold.close())
+  const ns = cold.namespace('w')
+  const bee = openBee(lateKeys(ns), { writable: false })
+  await bee.ready()
+  const view = bee.checkout(head)
+  await view.ready()
+  const ctx = view.context
+  await ctx.updateMaybe(view.config, 1, null)
+  t.ok(ctx.cores.length > 0, 'the head reaches a core besides its own')
+
+  const first = ctx.getCore(1)
+  t.is(first.key, null, 'the session it opened does not know its key yet')
+  t.is(ctx.getCore(1), first, 'a second read in the same tick reuses it')
+
+  await first.close()
+  await view.close()
+  await bee.close()
+  await ns.close()
+})
+
+function lateKeys(store) {
+  return new Proxy(store, {
+    get(target, prop) {
+      if (prop === 'get') return (opts) => target.get({ ...opts, preload: Promise.resolve({}) })
+      if (prop === 'session' || prop === 'namespace') {
+        return (...args) => lateKeys(target[prop](...args))
+      }
+
+      const value = Reflect.get(target, prop)
+      return typeof value === 'function' ? value.bind(target) : value
+    }
+  })
+}
