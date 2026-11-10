@@ -8,18 +8,22 @@ async function runTests() {
   test.pause()
 
   await import('./basic.js')
+  await import('./cache.js')
   await import('./checkpoint.js')
   await import('./compat.js')
   await import('./diff.js')
   await import('./download.js')
   await import('./fuzz.js')
+  await import('./inflate.js')
   await import('./fuzz-bad-cache.js')
   await import('./fuzz-diff.js')
   await import('./fuzz-multiwriter.js')
   await import('./perf.js')
+  await import('./map-core.js')
   await import('./prefetch.js')
   await import('./tree.js')
   await import('./undo.js')
+  await import('./streams.js')
 
   test.resume()
 }

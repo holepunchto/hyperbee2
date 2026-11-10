@@ -993,7 +993,7 @@ test('fuzz regression #5', async function (t) {
   t.alike(actual, sorted)
 })
 
-test('fuzz regression #n', async function (t) {
+test('fuzz regression #n', function (t) {
   t.pass('left blank for next regression')
 })
 

@@ -8,6 +8,7 @@ const NodeCache = require('./lib/cache.js')
 const WriteBatch = require('./lib/write.js')
 const copyChanges = require('./lib/copy.js')
 const CoreContext = require('./lib/context.js')
+const Mappings = require('./lib/mappings.js')
 const SessionConfig = require('./lib/session-config.js')
 const Downloader = require('./lib/download.js')
 const { inflate, inflateValue } = require('./lib/inflate.js')
@@ -29,12 +30,14 @@ class Hyperbee extends EventEmitter {
       wait = config.wait,
       trace = config.trace,
       core = getRootCore(store, key, getEncryptionProvider),
+      mappings = false,
       context = new CoreContext(
         store,
         core,
         new NodeCache(maxCacheSize),
         core,
-        getEncryptionProvider
+        getEncryptionProvider,
+        new Mappings({ disabled: !mappings })
       ),
       root = null,
       view = false,
@@ -52,6 +55,7 @@ class Hyperbee extends EventEmitter {
     this.view = view
     this.writable = writable
     this.unbatch = unbatch
+    this.streams = []
 
     this.autoUpdate = autoUpdate
     this.preload = preload
@@ -187,30 +191,41 @@ class Hyperbee extends EventEmitter {
     this.emit('ready')
   }
 
+  addStream(s) {
+    s.index = this.streams.push(s) - 1
+  }
+
+  removeStream(s) {
+    if (this.streams[s.index] !== s) {
+      throw Error('Stream not in expected position')
+    }
+    const last = this.streams.pop()
+    if (last === s) return
+    this.streams[s.index] = last
+    last.index = s.index
+  }
+
   async close() {
     if (!this.root) await this.ready()
     Hypercore.destroyRequests(this.config.activeRequests, null)
+    // reverse so pop-and-swap in removeStream() is safe
+    for (let i = this.streams.length - 1; i >= 0; i--) this.streams[i].destroy()
     if (this.view) return
     if (this.store.closing) return this.store.close()
     await this.store.close()
     this.emit('close')
   }
 
-  async cores({ local = true, ...opts } = {}) {
+  async cores({ local = true, recursive = false, ...opts } = {}) {
     const config = this.config.options(opts)
     await this.ready()
-    await this.context.update(config)
 
-    const cores = []
+    const keys = recursive
+      ? (await this.context.getAllContexts(config)).map((c) => c.core.key)
+      : await this.context.getCoreKeys(config)
 
-    // index 0 is the core this bee is viewing, the rest are referenced cores
-    for (let i = 0; i <= this.context.cores.length; i++) {
-      const key = this.context.getCoreKey(i)
-      if (!local && b4a.equals(key, this.context.local.key)) continue
-      cores.push(key)
-    }
-
-    return cores
+    if (local) return keys
+    return keys.filter((k) => !b4a.equals(k, this.context.local.key))
   }
 
   createReadStream(options) {
@@ -286,11 +301,10 @@ class Hyperbee extends EventEmitter {
   }
 
   async inflate(ptr, config) {
-    if (!ptr.value) {
-      await inflate(ptr, config)
-    }
+    let value = ptr.value
+    if (value === null) ptr.value = value = await inflate(ptr, config)
     this.bump(ptr)
-    return ptr.value
+    return value
   }
 
   async finalizeKeyPointer(key, config) {
@@ -339,6 +353,8 @@ class Hyperbee extends EventEmitter {
   }
 
   _setRoot(root, emit) {
+    if (root !== null && root !== EMPTY) this.context = root.context
+
     if (root === null || !root.equivalentTo(this.root)) {
       this.root = root
       if (emit) this.emit('update')

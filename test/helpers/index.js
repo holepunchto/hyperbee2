@@ -5,7 +5,7 @@ exports.create = create
 exports.createMultiple = createMultiple
 exports.replicate = replicate
 
-async function replicate(t, a, b) {
+function replicate(t, a, b) {
   const s1 = a.replicate(true)
   const s2 = b.replicate(false)
 

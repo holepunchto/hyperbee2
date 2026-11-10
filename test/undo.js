@@ -1,5 +1,7 @@
 const test = require('brittle')
 const b4a = require('b4a')
+const Corestore = require('corestore')
+const Bee = require('../')
 const { create } = require('./helpers')
 
 test('undo', async function (t) {
@@ -163,4 +165,40 @@ test('move', async function (t) {
       { key: b4a.from('3'), value: b4a.from('1') }
     ])
   }
+})
+
+test('undo after writing on top of another core', async function (t) {
+  const store = new Corestore(await t.tmp())
+  t.teardown(() => store.close())
+
+  const a = new Bee(store.namespace('a'))
+  await a.ready()
+  for (const k of ['a', 'b']) {
+    const w = a.write()
+    w.tryPut(b4a.from(k), b4a.from(k))
+    await w.flush()
+  }
+
+  const b = new Bee(store.namespace('b'))
+  await b.ready()
+  b.move({ key: a.core.key, length: a.core.length })
+  for (const k of ['c', 'd']) {
+    const w = b.write()
+    w.tryPut(b4a.from(k), b4a.from(k))
+    await w.flush()
+  }
+
+  t.alike(b.core.key, b.context.local.key, 'the tree views the core it wrote to')
+
+  const head = b.checkout()
+  t.alike((await head.get(b4a.from('d'))).value, b4a.from('d'), 'a checkout sees the writes')
+  await head.close()
+
+  const undone = b.undo(1)
+  t.alike((await undone.get(b4a.from('c'))).value, b4a.from('c'), 'undo keeps the earlier write')
+  t.is(await undone.get(b4a.from('d')), null, 'and drops the last one')
+  await undone.close()
+
+  await a.close()
+  await b.close()
 })
