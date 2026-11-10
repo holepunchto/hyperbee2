@@ -49,6 +49,10 @@ Apache-2.0
 Make a new Hyperbee2 instance. The `store` argument expects a
 [Corestore][corestore].
 
+Note that the bee owns the cores made by the Corestore, so any outside
+mutation to them, such as clearing blocks or similar, might corrupt the local
+instance.
+
 Options include:
 
 ```js

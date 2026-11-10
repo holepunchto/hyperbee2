@@ -201,6 +201,84 @@ test('markers from a failed download are kept', async function (t) {
   t.is(got.length, entries.filter((e) => e.key >= 'k0100' && e.key < 'k0200').length)
 })
 
+test('failed download does not mark nodes with missing children', async function (t) {
+  const { db, db2 } = await createRemoteTree(t)
+
+  // everything is local except the value of a single leaf, so the rest resolves right away
+  await collect(db2.createReadStream())
+  await disconnect(t, db, db2)
+
+  const reader = new Bee(db2.store, { key: db.core.key, t: 4 })
+  t.teardown(() => reader.close())
+  await reader.ready()
+
+  const { path, value } = await findLeafValue(reader)
+  t.ok(path.length > 2, 'leaf has ancestors below the root')
+
+  await db2.core.clear(value.seq - value.split, value.seq + 1)
+
+  for (let i = 0; i < 200; i++) {
+    const fresh = new Bee(db2.store, { key: db.core.key, t: 4 })
+    t.teardown(() => fresh.close())
+
+    try {
+      await fresh.download({ wait: false })
+      t.fail('should have failed')
+      return
+    } catch (err) {
+      if (err.code !== 'BLOCK_NOT_AVAILABLE') throw err
+    }
+
+    for (const ptr of path) {
+      if (!(await isDownloaded(ptr))) continue
+      t.fail('marked a node with a missing value below it at run ' + i)
+      return
+    }
+  }
+
+  t.pass('no node above the missing value was marked')
+})
+
+// path from the root to a leaf with a value stored in blocks that nothing above the leaves needs
+async function findLeafValue(db) {
+  const inner = new Set()
+  const leaves = []
+  const stack = [[db.root]]
+  const config = db.config.options({ wait: false, trace: (core, seq) => inner.add(seq) })
+
+  while (stack.length > 0) {
+    const path = stack.pop()
+    const v = await db.inflate(path[path.length - 1], config)
+
+    if (v.children.length === 0) {
+      leaves.push({ path, keys: v.keys })
+      continue
+    }
+
+    for (let i = 0; i < v.keys.length; i++) {
+      const p = v.keys.get(i).valuePointer
+      if (!p) continue
+      for (let seq = p.seq - p.split; seq <= p.seq; seq++) inner.add(seq)
+    }
+
+    for (let i = 0; i < v.children.length; i++) stack.push([...path, v.children.get(i)])
+  }
+
+  for (const { path, keys } of leaves) {
+    for (let i = 0; i < keys.length; i++) {
+      const value = keys.get(i).valuePointer
+      if (!value) continue
+      let shared = false
+      for (let seq = value.seq - value.split; seq <= value.seq; seq++) {
+        if (inner.has(seq)) shared = true
+      }
+      if (!shared) return { path, value }
+    }
+  }
+
+  throw new Error('No leaf value found')
+}
+
 async function isDownloaded(ptr) {
   const core = ptr.context.getCore(ptr.core)
   await core.ready()

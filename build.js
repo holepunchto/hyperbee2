@@ -369,6 +369,8 @@ bee.register({
   ]
 })
 
+// first byte of every key hyperbee stores in the local storage of a core,
+// so other kinds of local keys can be added later without colliding
 bee.register({
   name: 'local-key-type',
   offset: 0,
