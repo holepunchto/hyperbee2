@@ -129,6 +129,34 @@ test('inflate does not return null when the cache evicts the node it just read',
   t.alike(hit.value, entries[50].value, 'get walked down to a leaf')
 })
 
+test('a key read back does not keep the block it was written in alive', async function (t) {
+  const db = await create(t)
+
+  // a small key in a large batch, then every other key in it rewritten
+  let w = db.write()
+  w.tryPut(b4a.from('a'), b4a.from('a'))
+  for (let i = 0; i < 1000; i++) w.tryPut(entriesKey(i), b4a.alloc(1000))
+  await w.flush()
+
+  w = db.write()
+  for (let i = 0; i < 1000; i++) w.tryPut(entriesKey(i), b4a.from('x'))
+  await w.flush()
+
+  const reader = await create(t, { key: db.core.key })
+  await replicate(t, db, reader)
+  const view = reader.checkout({ length: db.head().length })
+
+  const node = await view.get(b4a.from('a'))
+  const block = await db.core.get(node.seq)
+
+  // a view into the block would sit on a buffer at least as large as the block
+  t.alike(node.value, b4a.from('a'))
+  t.ok(node.key.buffer.byteLength < block.byteLength, 'the key does not hold its block')
+  t.ok(node.value.buffer.byteLength < block.byteLength, 'nor does its value')
+
+  await view.close()
+})
+
 async function createRemote(t) {
   const db = await create(t, { t: 4 })
   const entries = []
