@@ -369,4 +369,34 @@ bee.register({
   ]
 })
 
+// first byte of every key hyperbee stores in the local storage of a core,
+// so other kinds of local keys can be added later without colliding
+bee.register({
+  name: 'local-key-type',
+  offset: 0,
+  enum: ['DOWNLOADED']
+})
+
+bee.register({
+  name: 'downloaded-key',
+  compact: true,
+  fields: [
+    {
+      name: 'type',
+      type: '@bee/local-key-type',
+      required: true
+    },
+    {
+      name: 'seq',
+      type: 'uint',
+      required: true
+    },
+    {
+      name: 'offset',
+      type: 'uint',
+      required: true
+    }
+  ]
+})
+
 Hyperschema.toDisk(schema)
