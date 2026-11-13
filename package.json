@@ -31,7 +31,8 @@
     "protocol-buffers-encodings": "^1.2.0",
     "resolve-reject-promise": "^1.1.0",
     "scope-lock": "^1.2.4",
-    "streamx": "^2.22.1"
+    "streamx": "^2.22.1",
+    "unslab": "^1.3.0"
   },
   "devDependencies": {
     "brittle": "^3.18.0",
