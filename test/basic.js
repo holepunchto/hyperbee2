@@ -173,6 +173,7 @@ test('import copies 2,051 binary entries in bounded chunks', async function (t) 
   const destination = await createImportBee(t)
 
   const big = b4a.alloc(2 * 1024 * 1024 + 1).fill(0xab)
+  const subLimit = b4a.alloc(700 * 1024).fill(0xcd)
   const overwritten = b4a.from('overwritten-value')
 
   {
@@ -185,7 +186,9 @@ test('import copies 2,051 binary entries in bounded chunks', async function (t) 
     const w = source.write()
     w.tryPut(binaryKey(1), b4a.alloc(0))
     w.tryPut(binaryKey(7), overwritten)
-    w.tryPut(binaryKey(2051), big)
+    w.tryPut(binaryKey(2050), big)
+    w.tryPut(binaryKey(2051), subLimit)
+    w.tryPut(binaryKey(2052), subLimit)
     w.tryDelete(binaryKey(100))
     w.tryDelete(binaryKey(2000))
     await w.flush()
@@ -209,7 +212,11 @@ test('import copies 2,051 binary entries in bounded chunks', async function (t) 
         if (op.value !== null) bytes += op.value.byteLength
       }
 
-      flushes.push({ entries: batch.ops.length, bytes })
+      flushes.push({
+        entries: batch.ops.length,
+        bytes,
+        keys: batch.ops.map((op) => op.key.toString('hex'))
+      })
       return flush()
     }
 
@@ -227,16 +234,30 @@ test('import copies 2,051 binary entries in bounded chunks', async function (t) 
   t.is(await destination.get(binaryKey(100)), null, 'does not copy a deleted key')
   t.is((await destination.get(binaryKey(2))).value, null, 'preserves a null value')
   t.alike((await destination.get(binaryKey(1))).value, b4a.alloc(0), 'preserves an empty value')
-  t.alike((await destination.get(binaryKey(2051))).value, big, 'copies an oversized value')
+  t.alike((await destination.get(binaryKey(2050))).value, big, 'copies an oversized value')
+
+  const pair = [2051, 2052].map((i) => binaryKey(i).toString('hex'))
+  const oversized = flushes.filter((f) => f.bytes > 1024 * 1024)
 
   t.ok(flushes.length > 1, 'copied in multiple chunks')
   t.ok(
     flushes.some((f) => f.entries === 1024),
     'filled a chunk up to the entry-count target'
   )
+  t.ok(oversized.length > 0, 'exceeded the byte target')
+  t.alike(
+    flushes.filter((f) => f.entries > 1 && f.bytes > 1024 * 1024),
+    [],
+    'kept every multi-entry chunk within the byte target'
+  )
   t.ok(
-    flushes.some((f) => f.entries < 1024 && f.bytes > 1024 * 1024),
-    'drained by bytes below the entry-count target'
+    oversized.every((f) => f.entries === 1),
+    'flushed every oversized chunk as a singleton'
+  )
+  t.is(
+    flushes.filter((f) => pair.every((key) => f.keys.includes(key))).length,
+    0,
+    'split sub-limit values that exceed the byte target together'
   )
   t.is(flushes.filter((f) => f.entries === 0).length, 0, 'never flushed an empty chunk')
   t.ok(flushes[flushes.length - 1].entries < 1024, 'flushed a short tail chunk')
