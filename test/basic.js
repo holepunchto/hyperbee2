@@ -487,6 +487,69 @@ test('import rejects a destination moved to length zero over populated blocks', 
   alikeImportState(t, destination, before, 'moved destination')
 })
 
+test('import builds an independent degree-128 tree in separate storage', async function (t) {
+  const sourceStorage = await t.tmp()
+  const destinationStorage = await t.tmp()
+
+  const sourceStore = new Corestore(sourceStorage)
+  const source = new Bee(sourceStore, { t: 5 })
+  t.teardown(() => source.close())
+
+  await source.ready()
+
+  {
+    const w = source.write()
+    for (let i = 0; i < 300; i++) w.tryPut(binaryKey(i), binaryValue(i))
+    await w.flush()
+  }
+
+  {
+    const w = source.write()
+    w.tryPut(binaryKey(3), b4a.from('updated'))
+    w.tryDelete(binaryKey(7))
+    await w.flush()
+  }
+
+  const expected = await readEntries(source)
+  const sourceHead = source.head()
+  const sourceLength = source.core.length
+
+  t.ok(expected.length > 128, 'source has more live entries than one destination node')
+
+  const destinationStore = new Corestore(destinationStorage)
+  const destination = new Bee(destinationStore)
+  t.teardown(() => destination.close())
+
+  await destination.ready()
+  t.is(destination.t, 128, 'destination uses the default degree')
+  t.ok(
+    !b4a.equals(destination.head().key, sourceHead.key),
+    'destination is rooted in a distinct core'
+  )
+
+  await destination.import(source)
+
+  t.alike(source.head(), sourceHead, 'source head unchanged after import')
+  t.is(source.core.length, sourceLength, 'source core length unchanged after import')
+  t.alike(await readEntries(destination), expected, 'copies every live entry')
+
+  const destinationHead = destination.head()
+
+  await source.close()
+  await destination.close()
+
+  const reopenedStore = new Corestore(destinationStorage)
+  const reopened = new Bee(reopenedStore)
+  t.teardown(() => reopened.close())
+  await reopened.ready()
+
+  t.alike(reopened.head(), destinationHead, 'reopened destination keeps the imported head')
+  t.alike(await readEntries(reopened), expected, 'entries survive without the source storage')
+
+  const seq = reopened.core.length - 1
+  t.is(decodeBlock(await reopened.core.get(seq), seq).t, 128, 'persisted root block stores t = 128')
+})
+
 test('basic, bigger (empty cache)', async function (t) {
   const db = await create(t)
   const w = db.write()

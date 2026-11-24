@@ -5,17 +5,19 @@ const { create } = require('./helpers')
 const { decodeBlock } = require('../lib/encoding.js')
 const { getEncoding } = require('../spec/hyperschema')
 
-test('basic hyperbee1', async function (t) {
-  const compatBatch = [
-    b4a.from('0a086879706572626565', 'hex'),
-    b4a.from('0a050a030a0101120568656c6c6f1a05776f726c64', 'hex'),
-    b4a.from('0a060a040a020201120368656a1a0676657264656e', 'hex'),
-    b4a.from('0a070a050a030201031204686f6c611a056d756e646f', 'hex')
-  ]
+const hyperbee1Header = b4a.from('0a086879706572626565', 'hex')
 
+const hyperbee1Batch = [
+  hyperbee1Header,
+  b4a.from('0a050a030a0101120568656c6c6f1a05776f726c64', 'hex'),
+  b4a.from('0a060a040a020201120368656a1a0676657264656e', 'hex'),
+  b4a.from('0a070a050a030201031204686f6c611a056d756e646f', 'hex')
+]
+
+test('basic hyperbee1', async function (t) {
   const db = await create(t)
 
-  await db.core.append(compatBatch)
+  await db.core.append(hyperbee1Batch)
 
   const snap = db.checkout({ length: db.core.length })
   const expected = [
@@ -31,6 +33,51 @@ test('basic hyperbee1', async function (t) {
   t.is(expected.length, 0)
 
   await snap.close()
+})
+
+test('import copies a hyperbee1 fixture into a fresh tree', async function (t) {
+  const source = await create(t)
+  await source.ready()
+  await source.core.append(hyperbee1Batch)
+
+  const checkout = source.checkout({ length: source.core.length })
+  t.teardown(() => checkout.close())
+
+  const destination = await create(t)
+  await destination.import(checkout)
+
+  t.alike(
+    await readEntries(destination),
+    [
+      { key: b4a.from('hej'), value: b4a.from('verden') },
+      { key: b4a.from('hello'), value: b4a.from('world') },
+      { key: b4a.from('hola'), value: b4a.from('mundo') }
+    ],
+    'copies the fixture in key order'
+  )
+})
+
+test('import does not treat a header-only hyperbee1 core as empty', async function (t) {
+  const source = await create(t, { t: 5 })
+  await source.ready()
+  await source.core.append(hyperbee1Header)
+  source.update()
+
+  t.is(source.head().length, 1, 'source root is the legacy header block')
+
+  const destination = await create(t)
+  await destination.ready()
+  const before = { length: destination.core.length, head: destination.head() }
+
+  // The legacy header is not a node. Both the ordinary read path and import
+  // reject it: a header-only core is a compatibility limitation, not an empty
+  // tree.
+  await t.exception(readEntries(source), /Decoded message is not valid/)
+  await t.exception(destination.import(source), /Decoded message is not valid/)
+
+  t.is(destination.core.length, before.length, 'appends no blocks')
+  t.alike(destination.head(), before.head, 'head unchanged')
+  t.alike(await readEntries(destination), [], 'destination stays empty')
 })
 
 test('bigger hyperbee1', async function (t) {
@@ -391,6 +438,19 @@ test('latest-format writes stay non-compat', async function (t) {
     'nodes are not limited to the compat degree'
   )
 })
+
+async function readEntries(bee) {
+  const entries = []
+
+  for await (const entry of bee.createReadStream()) {
+    entries.push({
+      key: b4a.from(entry.key),
+      value: entry.value === null ? null : b4a.from(entry.value)
+    })
+  }
+
+  return entries
+}
 
 async function walkNodes(db, ptr, out) {
   const v = ptr.value || (await db.inflate(ptr, db.config))
