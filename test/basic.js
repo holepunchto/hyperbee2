@@ -118,6 +118,354 @@ test('migrating by copy from t = 5 to t = 128', async function (t) {
   }
 })
 
+function binaryKey(i) {
+  return b4a.from(i.toString(16).padStart(8, '0'), 'hex')
+}
+
+function binaryValue(i) {
+  return b4a.from([i & 0xff, (i >>> 8) & 0xff, 0, 0xff])
+}
+
+async function readEntries(bee) {
+  const entries = []
+
+  for await (const entry of bee.createReadStream()) {
+    entries.push({
+      key: b4a.from(entry.key),
+      value: entry.value === null ? null : b4a.from(entry.value)
+    })
+  }
+
+  return entries
+}
+
+async function createImportBee(t, opts) {
+  const store = new Corestore(await t.tmp())
+  const bee = new Bee(store, opts)
+  t.teardown(() => bee.close())
+  await bee.ready()
+  return bee
+}
+
+function importState(bee) {
+  return { length: bee.core.length, head: bee.head() }
+}
+
+function alikeImportState(t, bee, state, message) {
+  t.is(bee.core.length, state.length, message + ': core length unchanged')
+  t.alike(bee.head(), state.head, message + ': head unchanged')
+}
+
+test('import into a fresh destination copies nothing from an empty source', async function (t) {
+  const source = await createImportBee(t)
+  const destination = await createImportBee(t)
+  const before = importState(destination)
+
+  await destination.import(source)
+
+  t.is(destination.core.length, before.length, 'appends no blocks')
+  t.alike(destination.head(), before.head, 'head unchanged')
+  t.alike(await readEntries(destination), [], 'destination stays empty')
+})
+
+test('import copies 2,051 binary entries in bounded chunks', async function (t) {
+  const source = await createImportBee(t)
+  const destination = await createImportBee(t)
+
+  const big = b4a.alloc(2 * 1024 * 1024 + 1).fill(0xab)
+  const overwritten = b4a.from('overwritten-value')
+
+  {
+    const w = source.write()
+    for (let i = 0; i <= 2052; i++) w.tryPut(binaryKey(i), i === 2 ? null : binaryValue(i))
+    await w.flush()
+  }
+
+  {
+    const w = source.write()
+    w.tryPut(binaryKey(1), b4a.alloc(0))
+    w.tryPut(binaryKey(7), overwritten)
+    w.tryPut(binaryKey(2051), big)
+    w.tryDelete(binaryKey(100))
+    w.tryDelete(binaryKey(2000))
+    await w.flush()
+  }
+
+  const expected = await readEntries(source)
+  t.is(expected.length, 2051, 'source has 2,051 live entries')
+
+  const flushes = []
+  const write = destination.write
+
+  destination.write = function (opts) {
+    const batch = write.call(this, opts)
+    const flush = batch.flush.bind(batch)
+
+    batch.flush = function () {
+      let bytes = 0
+
+      for (const op of batch.ops) {
+        bytes += op.key.byteLength
+        if (op.value !== null) bytes += op.value.byteLength
+      }
+
+      flushes.push({ entries: batch.ops.length, bytes })
+      return flush()
+    }
+
+    return batch
+  }
+
+  try {
+    await destination.import(source)
+  } finally {
+    destination.write = write
+  }
+
+  t.alike(await readEntries(destination), expected, 'copies every ordered key/value pair')
+  t.alike((await destination.get(binaryKey(7))).value, overwritten, 'copies overwritten value')
+  t.is(await destination.get(binaryKey(100)), null, 'does not copy a deleted key')
+  t.is((await destination.get(binaryKey(2))).value, null, 'preserves a null value')
+  t.alike((await destination.get(binaryKey(1))).value, b4a.alloc(0), 'preserves an empty value')
+  t.alike((await destination.get(binaryKey(2051))).value, big, 'copies an oversized value')
+
+  t.ok(flushes.length > 1, 'copied in multiple chunks')
+  t.ok(
+    flushes.some((f) => f.entries === 1024),
+    'filled a chunk up to the entry-count target'
+  )
+  t.ok(
+    flushes.some((f) => f.entries < 1024 && f.bytes > 1024 * 1024),
+    'drained by bytes below the entry-count target'
+  )
+  t.is(flushes.filter((f) => f.entries === 0).length, 0, 'never flushed an empty chunk')
+  t.ok(flushes[flushes.length - 1].entries < 1024, 'flushed a short tail chunk')
+})
+
+test('import keeps the pinned source view when the live source advances', async function (t) {
+  const source = await createImportBee(t)
+  const destination = await createImportBee(t)
+
+  {
+    const w = source.write()
+    for (let i = 0; i < 1500; i++) w.tryPut(binaryKey(i), binaryValue(i))
+    await w.flush()
+  }
+
+  const expected = await readEntries(source)
+  const lateKey = binaryKey(9999)
+  const lateValue = b4a.from('late-entry')
+
+  let flushedFirst
+  const firstFlush = new Promise((resolve) => {
+    flushedFirst = resolve
+  })
+  let releaseImport
+  const released = new Promise((resolve) => {
+    releaseImport = resolve
+  })
+
+  let paused = false
+  const write = destination.write
+
+  destination.write = function (opts) {
+    const batch = write.call(this, opts)
+    const flush = batch.flush.bind(batch)
+
+    batch.flush = async function () {
+      const result = await flush()
+
+      if (!paused) {
+        paused = true
+        flushedFirst()
+        await released
+      }
+
+      return result
+    }
+
+    return batch
+  }
+
+  try {
+    const importing = destination.import(source)
+
+    await firstFlush
+    {
+      const w = source.write()
+      w.tryPut(lateKey, lateValue)
+      await w.flush()
+    }
+    releaseImport()
+
+    await importing
+  } finally {
+    destination.write = write
+  }
+
+  t.alike(await readEntries(destination), expected, 'imports only the pinned source view')
+  t.is(await destination.get(lateKey), null, 'ignores the entry appended after the first flush')
+})
+
+test('import materializes a deferred undo source before copying', async function (t) {
+  const source = await createImportBee(t)
+  const destination = await createImportBee(t)
+
+  let firstBatch
+  {
+    const w = source.write()
+    for (let i = 0; i < 20; i++) w.tryPut(binaryKey(i), b4a.from('first-' + i))
+    await w.flush()
+    firstBatch = await readEntries(source)
+  }
+
+  {
+    const w = source.write()
+    for (let i = 20; i < 40; i++) w.tryPut(binaryKey(i), b4a.from('second-' + i))
+    await w.flush()
+  }
+
+  const undo = source.undo(1)
+  t.teardown(() => undo.close())
+
+  await destination.import(undo)
+
+  t.alike(await readEntries(destination), firstBatch, 'imports the materialized undo view')
+})
+
+test('import rejects the same bee without writing', async function (t) {
+  const bee = await createImportBee(t)
+
+  {
+    const w = bee.write()
+    w.tryPut(binaryKey(1), binaryValue(1))
+    await w.flush()
+  }
+
+  const before = importState(bee)
+
+  await t.exception(bee.import(bee), /itself/)
+
+  alikeImportState(t, bee, before, 'same bee')
+})
+
+test('import rejects a destination handle on the source core', async function (t) {
+  const store = new Corestore(await t.tmp())
+  const source = new Bee(store)
+  const destination = new Bee(store)
+
+  t.teardown(async () => {
+    await source.close()
+    await destination.close()
+  })
+
+  await source.ready()
+  await destination.ready()
+
+  const before = importState(destination)
+
+  await t.exception(destination.import(source), /core/)
+
+  alikeImportState(t, destination, before, 'same core key')
+})
+
+test('import rejects a read-only destination without writing', async function (t) {
+  const source = await createImportBee(t)
+  const destination = await createImportBee(t)
+
+  {
+    const w = source.write()
+    w.tryPut(binaryKey(1), binaryValue(1))
+    await w.flush()
+  }
+
+  const readOnly = destination.snapshot()
+  t.teardown(() => readOnly.close())
+
+  const before = importState(destination)
+
+  await t.exception(readOnly.import(source), /writable/)
+
+  alikeImportState(t, destination, before, 'read-only destination')
+})
+
+test('import rejects a destination not rooted in its local core', async function (t) {
+  const source = await createImportBee(t)
+  const other = await createImportBee(t)
+  const destination = await createImportBee(t)
+
+  {
+    const w = source.write()
+    w.tryPut(binaryKey(1), binaryValue(1))
+    await w.flush()
+  }
+
+  destination.move({ key: other.core.key, length: 0, writable: true })
+
+  const before = importState(destination)
+  t.is(before.length, 0, 'destination has no blocks')
+  t.is(before.head.length, 0, 'destination head is empty')
+  t.ok(b4a.equals(before.head.key, other.core.key), 'destination head points at another core')
+  t.ok(
+    !b4a.equals(before.head.key, destination.context.local.key),
+    'destination head is not the local append core'
+  )
+
+  await t.exception(destination.import(source), /local core/)
+
+  alikeImportState(t, destination, before, 'non-local destination')
+})
+
+test('import rejects a populated destination without writing', async function (t) {
+  const source = await createImportBee(t)
+  const destination = await createImportBee(t)
+
+  {
+    const w = source.write()
+    w.tryPut(binaryKey(1), binaryValue(1))
+    await w.flush()
+  }
+
+  {
+    const w = destination.write()
+    w.tryPut(binaryKey(2), binaryValue(2))
+    await w.flush()
+  }
+
+  const before = importState(destination)
+
+  await t.exception(destination.import(source), /fresh|empty|genesis/)
+
+  alikeImportState(t, destination, before, 'populated destination')
+})
+
+test('import rejects a destination moved to length zero over populated blocks', async function (t) {
+  const source = await createImportBee(t)
+  const destination = await createImportBee(t)
+
+  {
+    const w = source.write()
+    w.tryPut(binaryKey(1), binaryValue(1))
+    await w.flush()
+  }
+
+  {
+    const w = destination.write()
+    w.tryPut(binaryKey(2), binaryValue(2))
+    await w.flush()
+  }
+
+  destination.move({ length: 0 })
+
+  const before = importState(destination)
+  t.ok(before.length > 0, 'destination still has physical blocks')
+  t.is(before.head.length, 0, 'destination appears as a genesis head')
+
+  await t.exception(destination.import(source), /fresh|empty|blocks/)
+
+  alikeImportState(t, destination, before, 'moved destination')
+})
+
 test('basic, bigger (empty cache)', async function (t) {
   const db = await create(t)
   const w = db.write()
