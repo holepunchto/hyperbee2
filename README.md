@@ -248,6 +248,62 @@ Errors:
 
 - If the tree is not writable this will throw an Error
 
+#### `await db.import(source)`
+
+Copies the live key/value contents of the current `source` head into this Bee.
+The call returns once the destination head has been written and can be read
+again:
+
+```js
+import Hyperbee from 'hyperbee2'
+import Corestore from 'corestore'
+
+const source = new Hyperbee(new Corestore('./legacy'))
+const destination = new Hyperbee(new Corestore('./migrated'))
+
+await source.ready()
+await destination.ready()
+
+await destination.import(source)
+const head = destination.head()
+```
+
+`destination` must be a fresh, writable Bee rooted in its local core, with no
+blocks yet. It must use a core distinct from the source core, and the caller
+must have exclusive use of it until the import promise settles. Do not write
+to, move, close, or share the destination while the import is running.
+
+The destination's degree is chosen by the destination itself: pass `t` to its
+constructor when creating it (the default is 128). The source's degree is not
+copied and does not affect the result.
+
+The import copies only the current contents of one source version: the keys and
+values as raw bytes, without changes, previous versions, sequence numbers, core
+pointers or source degree. The source head is pinned when the import starts, so
+later source writes are not copied. An empty source leaves the fresh
+destination empty. After a successful import, `destination.head()` is the
+version the caller can read, reopen, replicate and share. The destination
+belongs to the caller: `import()` never closes or moves either Bee or either
+store.
+
+Import is not atomic across chunks. On the first source read or destination
+write error, the promise rejects with the original error. The importer closes
+its own source view, read stream and batch, but does not roll back or publish
+the destination; a partially written destination may remain. Discard a failed
+destination and retry into another fresh destination once the fault is fixed.
+The failed target does not need to be reused. Both caller Bees and their stores
+stay open after a rejection.
+
+A Hyperbee1 core that contains only the legacy header block is not an empty
+tree. Importing one rejects with `Decoded message is not valid`, the same
+decoder error the ordinary read path raises; the importer does not treat that
+error as an empty source.
+
+Note that two default Bees created on the same store both select the `bee`
+core. They are not independent, so they cannot be used as a source/destination
+pair; use distinct stores or namespaces, or pass distinct `key` options
+instead.
+
 #### `db.createReadStream([options])`
 
 Returns a [streamx][streamx] Readable Stream. This is async iterable.

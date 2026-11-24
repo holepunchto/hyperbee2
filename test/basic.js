@@ -156,6 +156,93 @@ function alikeImportState(t, bee, state, message) {
   t.alike(bee.head(), state.head, message + ': head unchanged')
 }
 
+function trackImportResources(source, destination, onBatch = null) {
+  const tracked = { view: null, viewClosed: false, streamDestroyed: false, batches: [] }
+
+  const makeView = source._makeView
+
+  source._makeView = function (...args) {
+    const view = makeView.apply(this, args)
+    tracked.view = view
+
+    const close = view.close
+    view.close = function (...closeArgs) {
+      tracked.viewClosed = true
+      return close.apply(this, closeArgs)
+    }
+
+    const createReadStream = view.createReadStream
+    view.createReadStream = function (...streamArgs) {
+      const stream = createReadStream.apply(this, streamArgs)
+      const destroy = stream.destroy
+      stream.destroy = function (...destroyArgs) {
+        tracked.streamDestroyed = true
+        return destroy.apply(this, destroyArgs)
+      }
+      return stream
+    }
+
+    return view
+  }
+
+  const write = destination.write
+  destination.write = function (opts) {
+    const batch = write.call(this, opts)
+    tracked.batches.push(batch)
+    if (onBatch !== null) onBatch(batch)
+    return batch
+  }
+
+  tracked.restore = function () {
+    source._makeView = makeView
+    destination.write = write
+  }
+
+  return tracked
+}
+
+function injectSourceReadFailure(source, fault) {
+  const core = source.core
+  const get = core.get
+  let failing = false
+
+  core.get = function (...args) {
+    if (failing) return Promise.reject(fault)
+    return get.apply(this, args)
+  }
+
+  return {
+    fail() {
+      failing = true
+      source.cache.empty()
+    },
+    restore() {
+      core.get = get
+    }
+  }
+}
+
+function instrumentAppend(bee, failOn = -1, fault = null) {
+  const core = bee.core
+  const append = core.append
+  let calls = 0
+
+  core.append = function (...args) {
+    calls++
+    if (calls === failOn) return Promise.reject(fault)
+    return append.apply(this, args)
+  }
+
+  return {
+    get calls() {
+      return calls
+    },
+    restore() {
+      core.append = append
+    }
+  }
+}
+
 test('import into a fresh destination copies nothing from an empty source', async function (t) {
   const source = await createImportBee(t)
   const destination = await createImportBee(t)
@@ -352,6 +439,150 @@ test('import materializes a deferred undo source before copying', async function
   await destination.import(undo)
 
   t.alike(await readEntries(destination), firstBatch, 'imports the materialized undo view')
+})
+
+test('import rejects the original source read error after a flush', async function (t) {
+  const source = await createImportBee(t)
+  const destination = await createImportBee(t)
+
+  {
+    const w = source.write()
+    for (let i = 0; i < 1500; i++) w.tryPut(binaryKey(i), binaryValue(i))
+    await w.flush()
+  }
+
+  const expected = await readEntries(source)
+  const sourceState = importState(source)
+  const fault = new Error('source read failed')
+  const read = injectSourceReadFailure(source, fault)
+  const append = instrumentAppend(destination)
+  const flushes = []
+  const tracked = trackImportResources(source, destination, (batch) => {
+    const flush = batch.flush.bind(batch)
+    batch.flush = async function () {
+      const result = await flush()
+      flushes.push(batch)
+      if (flushes.length === 1) read.fail()
+      return result
+    }
+  })
+
+  let rejected = null
+  try {
+    await destination.import(source)
+  } catch (err) {
+    rejected = err
+  } finally {
+    read.restore()
+    append.restore()
+    tracked.restore()
+  }
+
+  t.is(rejected, fault, 'rejects with the original source read error')
+  t.is(flushes.length, 1, 'flushes only the chunk completed before the failure')
+  t.is(append.calls, 1, 'appends no batch after the failed read')
+  t.ok(tracked.viewClosed, 'closes its owned source view')
+  t.ok(tracked.streamDestroyed, 'destroys its read stream')
+  t.is(tracked.batches.length, 2, 'keeps the flushed batch and the unflushed one')
+  t.ok(
+    tracked.batches.every((batch) => batch.closed),
+    'closes both the flushed and the unflushed batch'
+  )
+  t.is(source.closed, false, 'source bee remains open')
+  t.is(destination.closed, false, 'destination bee remains open')
+  t.alike(source.head(), sourceState.head, 'source head unchanged')
+  t.is(source.core.length, sourceState.length, 'source core length unchanged')
+  t.alike(await readEntries(source), expected, 'source still reads after the fault is removed')
+
+  const retry = await createImportBee(t)
+  await retry.import(source)
+  t.alike(await readEntries(retry), expected, 'retries into a different fresh destination')
+})
+
+test('import rejects the original destination append error after a flush', async function (t) {
+  const source = await createImportBee(t)
+  const destination = await createImportBee(t)
+
+  {
+    const w = source.write()
+    for (let i = 0; i < 1500; i++) w.tryPut(binaryKey(i), binaryValue(i))
+    await w.flush()
+  }
+
+  const expected = await readEntries(source)
+  const sourceState = importState(source)
+  const fault = new Error('destination append failed')
+  const append = instrumentAppend(destination, 2, fault)
+  const flushes = []
+  const tracked = trackImportResources(source, destination, (batch) => {
+    const flush = batch.flush.bind(batch)
+    batch.flush = function () {
+      flushes.push(batch)
+      return flush()
+    }
+  })
+
+  let rejected = null
+  try {
+    await destination.import(source)
+  } catch (err) {
+    rejected = err
+  } finally {
+    append.restore()
+    tracked.restore()
+  }
+
+  t.is(rejected, fault, 'rejects with the original destination append error')
+  t.is(flushes.length, 2, 'attempts no flush after the failed append')
+  t.is(append.calls, 2, 'appends no batch after the failed append')
+  t.ok(tracked.viewClosed, 'closes its owned source view')
+  t.ok(tracked.streamDestroyed, 'destroys its read stream')
+  t.is(tracked.batches.length, 2, 'keeps the flushed batch and the failed one')
+  t.ok(
+    tracked.batches.every((batch) => batch.closed),
+    'closes both the flushed and the failed batch'
+  )
+  t.is(source.closed, false, 'source bee remains open')
+  t.is(destination.closed, false, 'destination bee remains open')
+  t.alike(source.head(), sourceState.head, 'source head unchanged')
+  t.is(source.core.length, sourceState.length, 'source core length unchanged')
+  t.alike(await readEntries(source), expected, 'source still reads after the fault is removed')
+
+  const retry = await createImportBee(t)
+  await retry.import(source)
+  t.alike(await readEntries(retry), expected, 'retries into a different fresh destination')
+})
+
+test('import closes its own resources and leaves both bees open', async function (t) {
+  const source = await createImportBee(t)
+  const destination = await createImportBee(t)
+
+  {
+    const w = source.write()
+    for (let i = 0; i < 20; i++) w.tryPut(binaryKey(i), binaryValue(i))
+    await w.flush()
+  }
+
+  const expected = await readEntries(source)
+  const tracked = trackImportResources(source, destination)
+
+  try {
+    await destination.import(source)
+  } finally {
+    tracked.restore()
+  }
+
+  t.ok(tracked.viewClosed, 'closes its owned source view')
+  t.ok(tracked.streamDestroyed, 'destroys its read stream')
+  t.is(tracked.batches.length, 1, 'uses one batch for a short source')
+  t.ok(
+    tracked.batches.every((batch) => batch.closed),
+    'closes the batch after the final flush'
+  )
+  t.is(source.streams.length, 0, 'leaves no stream on the source')
+  t.is(source.closed, false, 'source bee remains open')
+  t.is(destination.closed, false, 'destination bee remains open')
+  t.alike(await readEntries(destination), expected, 'copies every entry')
 })
 
 test('import rejects the same bee without writing', async function (t) {
