@@ -35,6 +35,12 @@ const CASES = {
     count: 20000,
     key: mixedKey,
     value: mixedValue
+  },
+  'wide-keys-400': {
+    count: 400,
+    key: wideKey,
+    value: () => null,
+    seedEntries: 50
   }
 }
 
@@ -46,6 +52,15 @@ function sortedKey(i) {
 
 function oneByteValue(i) {
   return b4a.from([i & 0xff])
+}
+
+// Ascending 64 KiB keys with null values. A node holding a full 2t-1 of these
+// would exceed the hypercore block limit, so the writer has to bound node blocks
+// by the actual key bytes rather than only by the degree.
+function wideKey(i) {
+  const key = b4a.alloc(64 * 1024)
+  key.writeUInt32BE(i, 0)
+  return key
 }
 
 // The four byte counter prefix keeps keys strictly ascending; the suffix only
@@ -147,12 +162,20 @@ async function main() {
 
     const blocksBefore = destination.core.length
     const bytesBefore = destination.core.byteLength
-    const heapBefore = process.memoryUsage().heapUsed
-    let peakHeap = heapBefore
+    const before = process.memoryUsage()
+    const peak = {
+      heapUsed: before.heapUsed,
+      external: before.external,
+      arrayBuffers: before.arrayBuffers,
+      rss: before.rss
+    }
 
     const sampler = setInterval(() => {
-      const used = process.memoryUsage().heapUsed
-      if (used > peakHeap) peakHeap = used
+      const used = process.memoryUsage()
+      if (used.heapUsed > peak.heapUsed) peak.heapUsed = used.heapUsed
+      if (used.external > peak.external) peak.external = used.external
+      if (used.arrayBuffers > peak.arrayBuffers) peak.arrayBuffers = used.arrayBuffers
+      if (used.rss > peak.rss) peak.rss = used.rss
     }, 2)
     sampler.unref()
 
@@ -184,7 +207,10 @@ async function main() {
       ms: elapsed,
       bytes,
       blocks,
-      peakHeap: Math.max(0, peakHeap - heapBefore),
+      peakHeap: Math.max(0, peak.heapUsed - before.heapUsed),
+      peakExternal: Math.max(0, peak.external - before.external),
+      peakArrayBuffers: Math.max(0, peak.arrayBuffers - before.arrayBuffers),
+      peakRss: Math.max(0, peak.rss - before.rss),
       ok: digest === expected,
       ...shape
     }
@@ -232,8 +258,8 @@ async function createSource(dir, spec) {
   const bee = new Bee(store)
   await bee.ready()
 
-  for (let start = 0; start < spec.count; start += MAX_ENTRIES) {
-    const end = Math.min(spec.count, start + MAX_ENTRIES)
+  for (let start = 0; start < spec.count; start += spec.seedEntries || MAX_ENTRIES) {
+    const end = Math.min(spec.count, start + (spec.seedEntries || MAX_ENTRIES))
     const batch = bee.write()
 
     for (let i = start; i < end; i++) {
@@ -320,6 +346,9 @@ function summarise(name, impl, samples) {
     bytes: median(samples.map((s) => s.bytes)),
     blocks: median(samples.map((s) => s.blocks)),
     peakHeap: median(samples.map((s) => s.peakHeap)),
+    peakExternal: median(samples.map((s) => s.peakExternal)),
+    peakArrayBuffers: median(samples.map((s) => s.peakArrayBuffers)),
+    peakRss: median(samples.map((s) => s.peakRss)),
     levels: first.levels,
     nodes: first.nodes,
     leaves: first.leaves,
@@ -336,12 +365,14 @@ function median(values) {
 
 function print(rows) {
   const header = [
-    'case'.padEnd(12),
+    'case'.padEnd(14),
     'impl'.padEnd(8),
     'ms'.padStart(8),
     'bytes'.padStart(10),
     'blocks'.padStart(7),
-    'peak'.padStart(8),
+    'heap'.padStart(7),
+    'ext'.padStart(7),
+    'rss'.padStart(7),
     'levels'.padStart(7),
     'leaves'.padStart(7),
     'leaf keys'.padStart(11),
@@ -354,12 +385,14 @@ function print(rows) {
   for (const row of rows) {
     console.log(
       [
-        row.case.padEnd(12),
+        row.case.padEnd(14),
         row.impl.padEnd(8),
         String(Math.round(row.ms)).padStart(8),
         String(row.bytes).padStart(10),
         String(row.blocks).padStart(7),
-        (row.peakHeap / 1024 / 1024).toFixed(1).padStart(8),
+        (row.peakHeap / 1024 / 1024).toFixed(1).padStart(7),
+        (row.peakExternal / 1024 / 1024).toFixed(1).padStart(7),
+        (row.peakRss / 1024 / 1024).toFixed(1).padStart(7),
         String(row.levels).padStart(7),
         String(row.leaves).padStart(7),
         row.leafKeys.join('/').padStart(11),

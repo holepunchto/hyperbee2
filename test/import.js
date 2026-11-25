@@ -346,7 +346,10 @@ test('import copies 2,051 binary entries in bounded chunks', async function (t) 
   for (const { block } of await readBlocks(destination)) {
     if (block.keys !== null) {
       keyBlocks.push(block)
-      t.ok(block.keys.length <= maxKeys, 'kept every node block within one node')
+      // One block can hold deltas for more than one node; each node's keys are
+      // still bounded by the degree at the writer boundary.
+      const nodes = Math.max(1, block.tree.length)
+      t.ok(block.keys.length <= maxKeys * nodes, 'kept every node block within the degree')
     }
 
     if (block.values !== null) {
@@ -910,9 +913,13 @@ test('import packs node-capacity boundaries', async function (t) {
   }
 })
 
-test('import packs the two-level capacity boundary', async function (t) {
+test('import commits bounded batches at the two-level boundary', async function (t) {
+  // Two-level capacity at t=128 is 255 + 256 * 255 entries. The writer commits
+  // bounded batches, so the rightmost leaf is split at chunk boundaries and the
+  // exact two-level maximum needs one extra leaf. Both cases must still be
+  // legal and round-trip.
   for (const [count, levels, leaves] of [
-    [65535, 2, 256],
+    [65535, 3, 257],
     [65536, 3, 257]
   ]) {
     const source = await createImportBee(t)
@@ -1014,16 +1021,22 @@ test('import preserves null, empty and oversized values', async function (t) {
   )
 })
 
-test('import leaves one genesis batch that stays writable', async function (t) {
+test('import bounds wide node blocks', async function (t) {
   const source = await createImportBee(t)
   const destination = await createImportBee(t)
+  const count = 400
+  const wide = 64 * 1024
 
-  const big = b4a.alloc(64 * 1024).fill(0xfa)
-
-  {
+  for (let start = 0; start < count; start += 50) {
     const w = source.write()
-    for (let i = 0; i < 600; i++) w.tryPut(binaryKey(i), binaryValue(i))
-    w.tryPut(binaryKey(50), big)
+    const end = Math.min(count, start + 50)
+
+    for (let i = start; i < end; i++) {
+      const key = b4a.alloc(wide)
+      key.writeUInt32BE(i, 0)
+      w.tryPut(key, null)
+    }
+
     await w.flush()
   }
 
@@ -1031,31 +1044,151 @@ test('import leaves one genesis batch that stays writable', async function (t) {
 
   await destination.import(source)
 
+  t.alike(await readEntries(destination), expected, count + ': round-trips every wide key')
+
+  const shape = await treeShape(destination)
+  assertLegalTree(t, shape, 128, 'wide keys')
+  t.ok(shape.levels >= 1, 'wide keys build a tree')
+
+  let largest = 0
+  for (let seq = 0; seq < destination.core.length; seq++) {
+    const buffer = await destination.core.get(seq)
+    if (buffer.byteLength > largest) largest = buffer.byteLength
+  }
+
+  t.ok(largest <= 15 * 1024 * 1024, 'keeps every wide-key block under the hypercore block limit')
+})
+
+test('import bounds near-limit values', async function (t) {
+  const source = await createImportBee(t)
+  const destination = await createImportBee(t)
+  const external = b4a.alloc(2 * 1024).fill(0xcd)
+  const nearLimit = b4a.alloc(15 * 1024 * 1024 - 1024).fill(0xab)
+
+  // One source batch: the writer must not group the small external value with
+  // the near-limit value into a block above the hypercore limit.
+  {
+    const w = source.write()
+    w.tryPut(binaryKey(0), external)
+    w.tryPut(binaryKey(1), nearLimit)
+    await w.flush()
+  }
+
+  await destination.import(source)
+
+  t.alike((await destination.get(binaryKey(0))).value, external, 'copies the external value')
+  t.alike((await destination.get(binaryKey(1))).value, nearLimit, 'copies the near-limit value')
+
+  let largest = 0
+  let nearLimitBlock = null
+
+  for (let seq = 0; seq < destination.core.length; seq++) {
+    const buffer = await destination.core.get(seq)
+    if (buffer.byteLength > largest) largest = buffer.byteLength
+
+    const block = decodeBlock(buffer, seq)
+    if (block.values !== null && block.values.some((value) => b4a.equals(value, nearLimit))) {
+      nearLimitBlock = block
+    }
+  }
+
+  t.ok(
+    largest <= 15 * 1024 * 1024,
+    'keeps every near-limit value block under the hypercore block limit'
+  )
+  t.ok(nearLimitBlock !== null, 'stores the near-limit value in its own block')
+  t.is(
+    nearLimitBlock === null ? -1 : nearLimitBlock.values.length,
+    1,
+    'does not group a smaller value with the near-limit value'
+  )
+})
+
+test('import respects a small node cache', async function (t) {
+  const source = await createImportBee(t)
+  const destination = await createImportBee(t, { maxCacheSize: 8 })
+  const count = 5000
+
+  {
+    const w = source.write()
+    for (let i = 0; i < count; i++) w.tryPut(binaryKey(i), binaryValue(i))
+    await w.flush()
+  }
+
+  const expected = await readEntries(source)
+
+  await destination.import(source)
+
+  t.alike(await readEntries(destination), expected, 'copies every entry with a tiny node cache')
+
+  const cache = destination.context.getLocalContext().cache
+  t.is(cache.maxSize, 8, 'keeps the configured cache bound')
+  t.ok(cache.size <= cache.maxSize, 'evicts nodes instead of retaining the whole imported tree')
+})
+
+test('import commits bounded change batches', async function (t) {
+  const { source, entries: expected } = await seedImportSource(t, 6000)
+  const destination = await createImportBee(t)
+
+  await destination.import(source)
+
+  t.alike(await readEntries(destination), expected, 'copies every entry')
+
   const changes = []
 
   for await (const change of destination.createChangesStream()) {
     changes.push(change)
-    break
   }
 
-  t.is(changes.length, 1, 'reads one genesis change')
-  t.is(changes[0].tail, null, 'the genesis change has no predecessor')
-  t.is(
-    changes[0].head.length,
-    destination.core.length,
-    'the genesis change ends at the import head'
-  )
-  t.is(
-    changes[0].batch.length,
-    destination.core.length,
-    'the genesis batch spans every block written by the import'
-  )
+  t.ok(changes.length > 1, 'splits the import into multiple changes')
+  t.is(changes[changes.length - 1].tail, null, 'the oldest change has no predecessor')
+  t.is(changes[0].head.length, destination.core.length, 'the newest change ends at the import head')
   t.ok(
-    changes[0].batch.some(
-      (block) => block.values !== null && block.values.some((value) => b4a.equals(value, big))
-    ),
-    'the genesis batch contains the external value block'
+    changes[0].batch.length < destination.core.length,
+    'the newest batch does not span every block written by the import'
   )
+
+  let prefix = 0
+  let previous = null
+
+  for (let i = 0; i < changes.length; i++) {
+    const change = changes[i]
+
+    if (previous !== null) {
+      t.alike(change.head, previous.tail, i + ': change head matches the next tail')
+    }
+    previous = change
+
+    t.ok(change.batch.length > 0, i + ': batch has blocks')
+
+    for (let j = 0; j < change.batch.length; j++) {
+      const block = change.batch[j]
+      t.is(block.batch.start, j, i + ': batch start spans only its change')
+      t.is(
+        block.batch.end,
+        change.batch.length - 1 - j,
+        i + ': batch end records the block position'
+      )
+    }
+  }
+
+  // Changes stream newest first; walk them oldest first to check that every
+  // committed version is a readable prefix of the import.
+  for (let i = changes.length - 1; i >= 0; i--) {
+    const change = changes[i]
+    const view = destination.checkout(change.head)
+
+    try {
+      const entries = await readEntries(view)
+      t.ok(entries.length > prefix, i + ': change reads a longer prefix')
+      t.alike(entries, expected.slice(0, entries.length), i + ': change head reads a prefix')
+      prefix = entries.length
+    } finally {
+      await view.close()
+    }
+  }
+
+  t.is(prefix, expected.length, 'the changes cover every imported entry')
 
   const head = destination.head()
   const extraKey = binaryKey(100000)
@@ -1070,7 +1203,7 @@ test('import leaves one genesis batch that stays writable', async function (t) {
   t.alike(
     await readEntries(destination),
     expected.concat([{ key: extraKey, value: extraValue }]),
-    'a normal write appends to the packed tree'
+    'a normal write appends to the imported tree'
   )
   t.ok(destination.head().length > head.length, 'the new write advances the head')
 })
