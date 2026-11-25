@@ -279,8 +279,11 @@ copied and does not affect the result.
 
 The import copies only the current contents of one source version: the keys and
 values as raw bytes, without changes, previous versions, sequence numbers, core
-pointers or source degree. The source head is pinned when the import starts, so
-later source writes are not copied. An empty source leaves the fresh
+pointers or source degree. The version is selected synchronously when
+`import()` is called: the source root, context and any pending undo are captured
+before the call returns its promise, so a `source.move()` or write immediately
+after the call is not copied. An unopened source is pinned as soon as it becomes
+ready, without waiting for the destination. An empty source leaves the fresh
 destination empty. After a successful import, `destination.head()` is the
 version the caller can read, reopen, replicate and share. The destination
 belongs to the caller: `import()` never closes or moves either Bee or either

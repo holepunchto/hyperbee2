@@ -45,6 +45,16 @@ async function seedImportSource(t, count = 1500) {
   return { source, entries: await readEntries(source), state: importState(source) }
 }
 
+async function seedOldVersion(source) {
+  {
+    const w = source.write()
+    w.tryPut(b4a.from('old'), b4a.from('old-value'))
+    await w.flush()
+  }
+
+  return readEntries(source)
+}
+
 function importState(bee) {
   return { length: bee.core.length, head: bee.head() }
 }
@@ -368,6 +378,72 @@ test('import keeps the pinned source view when the live source advances', async 
   t.is(await destination.get(lateKey), null, 'ignores the entry appended after the first flush')
 })
 
+test('import pins the source version before the caller moves it', async function (t) {
+  const source = await createImportBee(t)
+  const destination = await createImportBee(t)
+  const expected = await seedOldVersion(source)
+
+  const done = destination.import(source)
+  source.move({ length: 0 })
+
+  await done
+
+  t.alike(await readEntries(destination), expected, 'copies the version selected at the call')
+  t.is(source.head().length, 0, 'source stays moved to length zero')
+})
+
+test('import pins the source before waiting on a delayed destination', async function (t) {
+  const source = await createImportBee(t)
+  const destination = await createImportBee(t)
+  const expected = await seedOldVersion(source)
+
+  const ready = destination.ready
+  let releaseReady = null
+  const gate = new Promise((resolve) => {
+    releaseReady = resolve
+  })
+
+  destination.ready = async function () {
+    await gate
+    return ready.call(this)
+  }
+
+  try {
+    const done = destination.import(source)
+    source.move({ length: 0 })
+    releaseReady()
+
+    await done
+  } finally {
+    destination.ready = ready
+  }
+
+  t.alike(await readEntries(destination), expected, 'copies the version selected at the call')
+  t.is(source.head().length, 0, 'source stays moved to length zero')
+})
+
+test('import pins an unopened source once it is ready', async function (t) {
+  const storage = await t.tmp()
+
+  const seedStore = new Corestore(storage)
+  const seed = new Bee(seedStore)
+  await seed.ready()
+  const expected = await seedOldVersion(seed)
+  await seed.close()
+
+  const destination = await createImportBee(t)
+
+  const store = new Corestore(storage)
+  const source = new Bee(store)
+  t.teardown(() => source.close())
+
+  t.is(source.head(), null, 'source has not selected a version yet')
+
+  await destination.import(source)
+
+  t.alike(await readEntries(destination), expected, 'copies the source version after it opens')
+})
+
 test('import materializes a deferred undo source before copying', async function (t) {
   const source = await createImportBee(t)
   const destination = await createImportBee(t)
@@ -578,9 +654,15 @@ test('import rejects a populated destination without writing', async function (t
   }
 
   const before = importState(destination)
+  const tracked = trackImportResources(source, destination)
 
-  await t.exception(destination.import(source), /fresh|empty|genesis/)
+  try {
+    await t.exception(destination.import(source), /fresh|empty|genesis/)
+  } finally {
+    tracked.restore()
+  }
 
+  t.ok(tracked.viewClosed, 'closes its owned source view')
   alikeImportState(t, destination, before, 'populated destination')
 })
 
