@@ -55,6 +55,32 @@ async function seedOldVersion(source) {
   return readEntries(source)
 }
 
+async function seedTwoBatchStore(t) {
+  const storage = await t.tmp()
+  const store = new Corestore(storage)
+  const source = new Bee(store)
+  await source.ready()
+
+  let firstBatch
+  {
+    const w = source.write()
+    for (let i = 0; i < 20; i++) w.tryPut(binaryKey(i), b4a.from('first-' + i))
+    await w.flush()
+    firstBatch = await readEntries(source)
+  }
+
+  {
+    const w = source.write()
+    for (let i = 20; i < 40; i++) w.tryPut(binaryKey(i), b4a.from('second-' + i))
+    await w.flush()
+  }
+
+  const all = await readEntries(source)
+  await source.close()
+
+  return { storage, firstBatch, all }
+}
+
 function importState(bee) {
   return { length: bee.core.length, head: bee.head() }
 }
@@ -70,7 +96,9 @@ function trackImportResources(source, destination, onAppend = null) {
     stream: null,
     viewClosed: false,
     streamClosed: false,
-    appends: []
+    appends: [],
+    batches: [],
+    flushes: []
   }
 
   const makeView = source._makeView
@@ -97,8 +125,34 @@ function trackImportResources(source, destination, onAppend = null) {
     return view
   }
 
+  const write = destination.write
+
+  destination.write = function (...writeArgs) {
+    const batch = write.apply(this, writeArgs)
+    tracked.batches.push(batch)
+
+    const flush = batch.flush
+    batch.flush = function (...flushArgs) {
+      let bytes = 0
+
+      for (const op of batch.ops) {
+        bytes += op.key.byteLength
+        if (op.value !== null) bytes += op.value.byteLength
+      }
+
+      tracked.flushes.push({
+        entries: batch.ops.length,
+        bytes,
+        keys: batch.ops.map((op) => op.key.toString('hex'))
+      })
+      return flush.apply(this, flushArgs)
+    }
+
+    return batch
+  }
+
   // Import writes directly through the local core. Tracking that boundary works
-  // for both a chunked writer and the packed loader.
+  // for the chunked writer and lets each committed batch be inspected.
   const core = destination.context.getLocalContext().core
   const append = core.append
 
@@ -116,6 +170,7 @@ function trackImportResources(source, destination, onAppend = null) {
 
   tracked.restore = function () {
     source._makeView = makeView
+    destination.write = write
     core.append = append
   }
 
@@ -375,6 +430,40 @@ test('import copies 2,051 binary entries in bounded chunks', async function (t) 
       holder.keys.find((key) => b4a.equals(key.key, binaryKey(2050))).valuePointer !== null,
     'externalizes the oversized value pointer'
   )
+
+  const pair = [2051, 2052].map((i) => binaryKey(i).toString('hex'))
+  const oversized = tracked.flushes.filter((flush) => flush.bytes > 1024 * 1024)
+
+  t.ok(tracked.flushes.length > 1, 'copied in multiple chunks')
+  t.ok(
+    tracked.flushes.some((flush) => flush.entries === 1024),
+    'filled a chunk up to the entry-count cap'
+  )
+  t.ok(oversized.length > 0, 'exceeded the byte cap')
+  t.alike(
+    tracked.flushes.filter((flush) => flush.entries > 1 && flush.bytes > 1024 * 1024),
+    [],
+    'kept every multi-entry chunk within the byte cap'
+  )
+  t.ok(
+    oversized.every((flush) => flush.entries === 1),
+    'flushed every oversized chunk as a singleton'
+  )
+  t.is(
+    tracked.flushes.filter((flush) => pair.every((key) => flush.keys.includes(key))).length,
+    0,
+    'split sub-limit values that exceed the byte cap together'
+  )
+  t.is(
+    tracked.flushes.filter((flush) => flush.entries === 0).length,
+    0,
+    'never flushed an empty chunk'
+  )
+  t.ok(tracked.flushes[tracked.flushes.length - 1].entries < 1024, 'flushed a short tail chunk')
+  t.ok(
+    tracked.batches.every((batch) => batch.closed),
+    'closes every committed batch after the final flush'
+  )
 })
 
 test('import keeps the pinned source view when the live source advances', async function (t) {
@@ -532,6 +621,63 @@ test('import materializes a deferred undo source before copying', async function
   t.alike(await readEntries(destination), firstBatch, 'imports the materialized undo view')
 })
 
+test('import preserves an unopened undo source selection', async function (t) {
+  const destination = await createImportBee(t)
+  const { storage, firstBatch, all } = await seedTwoBatchStore(t)
+
+  const source = new Bee(new Corestore(storage))
+  t.teardown(() => source.close())
+
+  const undo = source.undo(1)
+  t.teardown(() => undo.close())
+
+  t.is(source.head(), null, 'source has not selected a version yet')
+  t.is(undo.unbatch, 1, 'undo view keeps its pending rollback before it opens')
+
+  await destination.import(undo)
+
+  t.alike(await readEntries(destination), firstBatch, 'copies the selected prior version')
+  t.alike(await readEntries(source), all, 'leaves the source on its latest version')
+})
+
+test('import preserves an unopened undo selection while destination is delayed', async function (t) {
+  const destination = await createImportBee(t)
+  const { storage, firstBatch, all } = await seedTwoBatchStore(t)
+
+  const source = new Bee(new Corestore(storage))
+  t.teardown(() => source.close())
+
+  const ready = destination.ready
+  let releaseReady = null
+  const gate = new Promise((resolve) => {
+    releaseReady = resolve
+  })
+
+  destination.ready = async function () {
+    await gate
+    return ready.call(this)
+  }
+
+  const undo = source.undo(1)
+  t.teardown(() => undo.close())
+
+  try {
+    const importing = destination.import(undo)
+
+    // Let the view finish opening, which clears its own pending undo, before
+    // the destination readiness gate is released.
+    await undo.ready()
+    releaseReady()
+
+    await importing
+  } finally {
+    destination.ready = ready
+  }
+
+  t.alike(await readEntries(destination), firstBatch, 'copies the version selected at the call')
+  t.alike(await readEntries(source), all, 'leaves the source on its latest version')
+})
+
 test('import rejects the original source read error after progress', async function (t) {
   const { source, entries: expected, state: sourceState } = await seedImportSource(t, 9000)
   const destination = await createImportBee(t)
@@ -557,11 +703,17 @@ test('import rejects the original source read error after progress', async funct
   }
 
   t.is(rejected, fault, 'rejects with the original source read error')
+  t.is(tracked.flushes.length, 1, 'flushes only the chunk completed before the failure')
   t.is(append.calls, 1, 'appends no blocks after the failed read')
   t.is(tracked.appends.length, 1, 'stops at the append completed before the failure')
   t.ok(destination.core.length > 0, 'keeps the progress written before the failure')
   t.is(destination.cache.dirty.length, 0, 'unmarks its written nodes after the failure')
   t.ok(tracked.viewClosed, 'closes its owned source view')
+  t.is(tracked.batches.length, 2, 'keeps the flushed batch and the unflushed one')
+  t.ok(
+    tracked.batches.every((batch) => batch.closed),
+    'closes both the flushed and the unflushed batch'
+  )
   await assertImportStreamReleased(t, tracked, 'source read failure')
   assertImportLeavesBothOpen(t, source, destination)
   await assertSourceIntactAndRetry(t, source, sourceState, expected)
@@ -583,11 +735,17 @@ test('import rejects the original destination append error after progress', asyn
   }
 
   t.is(rejected, fault, 'rejects with the original destination append error')
+  t.is(tracked.flushes.length, 2, 'attempts no flush after the failed append')
   t.is(append.calls, 2, 'appends no blocks after the failed append')
   t.is(tracked.appends.length, 2, 'records the progress and the failed attempt')
   t.ok(destination.core.length > 0, 'keeps the progress written before the failure')
   t.is(destination.cache.dirty.length, 0, 'unmarks its written nodes after the failure')
   t.ok(tracked.viewClosed, 'closes its owned source view')
+  t.is(tracked.batches.length, 2, 'keeps the flushed batch and the failed one')
+  t.ok(
+    tracked.batches.every((batch) => batch.closed),
+    'closes both the flushed and the failed batch'
+  )
   await assertImportStreamReleased(t, tracked, 'destination append failure')
   assertImportLeavesBothOpen(t, source, destination)
   await assertSourceIntactAndRetry(t, source, sourceState, expected)
@@ -607,6 +765,11 @@ test('import closes its own resources and leaves both bees open', async function
   t.ok(tracked.viewClosed, 'closes its owned source view')
   await assertImportStreamReleased(t, tracked, 'successful import')
   t.is(tracked.appends.length, 1, 'writes a short source in one append')
+  t.is(tracked.batches.length, 1, 'uses one batch for a short source')
+  t.ok(
+    tracked.batches.every((batch) => batch.closed),
+    'closes the batch after the final flush'
+  )
   t.is(destination.cache.dirty.length, 0, 'unmarks every written node')
   assertImportLeavesBothOpen(t, source, destination)
   t.alike(await readEntries(destination), expected, 'copies every entry')
