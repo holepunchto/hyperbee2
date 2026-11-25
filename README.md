@@ -297,10 +297,10 @@ destination and retry into another fresh destination once the fault is fixed.
 The failed target does not need to be reused. Both caller Bees and their stores
 stay open after a rejection.
 
-A Hyperbee1 core that contains only the legacy header block is not an empty
-tree. Importing one rejects with `Decoded message is not valid`, the same
-decoder error the ordinary read path raises; the importer does not treat that
-error as an empty source.
+A Hyperbee1 core that contains only the legacy protocol header — for example
+after deleting an absent key from a fresh tree — is an empty tree. Its read
+stream yields no entries, so importing it leaves the fresh destination empty.
+A malformed or truncated header is still a decoder error, not an empty tree.
 
 Note that two default Bees created on the same store both select the `bee`
 core. They are not independent, so they cannot be used as a source/destination

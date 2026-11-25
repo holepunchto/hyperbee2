@@ -7,6 +7,31 @@ const { getEncoding } = require('../spec/hyperschema')
 
 const hyperbee1Header = b4a.from('0a086879706572626565', 'hex')
 
+// The remaining legacy fixtures were captured from hyperbee@2.27.3. A fresh
+// core after `await bee.del('absent')` holds only the protocol header. The
+// metadata variants come from Bees created with
+// { contentFeed: <32 x 0xab>, userData: <'user data'> } and `metadata: {}`.
+const hyperbee1HeaderWithMetadata = b4a.from(
+  '0a086879706572626565122d0a20abababababababababababababababababababababababababababababababab1209757365722064617461',
+  'hex'
+)
+const hyperbee1HeaderWithEmptyMetadata = b4a.from('0a0868797065726265651200', 'hex')
+
+// Malformed header variants: a truncated protocol, a metadata field that
+// declares no payload, and unknown fields in the header and its metadata.
+const hyperbee1TruncatedHeader = b4a.from('0a0868797065726265', 'hex')
+const hyperbee1TruncatedHeaderMetadata = b4a.from('0a0868797065726265651201', 'hex')
+const hyperbee1UnknownHeaderField = b4a.from('0a0868797065726265651a00', 'hex')
+const hyperbee1UnknownMetadataField = b4a.from('0a08687970657262656512021a00', 'hex')
+
+// Node.encode({ index: YoloIndex with keys: [0], key: 'hello', value: 'world' })
+// from hyperbee@2.27.3, appended without a header so the core is one block.
+const hyperbee1SingleNode = b4a.from('0a050a030a0100120568656c6c6f1a05776f726c64', 'hex')
+
+// The first block of the 'basic block 0' batch below is self-contained, so it
+// is a valid modern one-block core on its own.
+const block0SingleBlock = b4a.from('000000000601010000000001022330022330', 'hex')
+
 const hyperbee1Batch = [
   hyperbee1Header,
   b4a.from('0a050a030a0101120568656c6c6f1a05776f726c64', 'hex'),
@@ -57,27 +82,122 @@ test('import copies a hyperbee1 fixture into a fresh tree', async function (t) {
   )
 })
 
-test('import does not treat a header-only hyperbee1 core as empty', async function (t) {
+test('reads a real empty hyperbee1 tree as an empty tree', async function (t) {
+  const headers = [
+    ['without metadata', hyperbee1Header],
+    ['with metadata', hyperbee1HeaderWithMetadata],
+    ['with empty metadata', hyperbee1HeaderWithEmptyMetadata]
+  ]
+
+  for (const [label, header] of headers) {
+    const source = await create(t, { t: 5 })
+    await source.ready()
+    await source.core.append(header)
+    source.update()
+
+    t.is(source.head().length, 1, `${label}: source root is the legacy header block`)
+    t.alike(await readEntries(source), [], `${label}: source stream yields no entries`)
+
+    const destination = await create(t)
+    await destination.ready()
+    const before = { length: destination.core.length, head: destination.head() }
+
+    await destination.import(source)
+
+    t.is(destination.core.length, before.length, `${label}: imports without appending a block`)
+    t.alike(destination.head(), before.head, `${label}: destination head unchanged`)
+    t.alike(await readEntries(destination), [], `${label}: destination stays empty`)
+  }
+})
+
+test('rejects malformed hyperbee1 headers instead of reading them as empty', async function (t) {
+  const headers = [
+    ['truncated protocol', hyperbee1TruncatedHeader],
+    ['truncated metadata', hyperbee1TruncatedHeaderMetadata],
+    ['unknown header field', hyperbee1UnknownHeaderField],
+    ['unknown metadata field', hyperbee1UnknownMetadataField]
+  ]
+
+  for (const [label, header] of headers) {
+    const source = await create(t, { t: 5 })
+    await source.ready()
+    await source.core.append(header)
+    source.update()
+
+    await t.exception(
+      readEntries(source),
+      /Decoded message is not valid/,
+      `${label}: read path rejects`
+    )
+
+    const destination = await create(t)
+    await destination.ready()
+    const before = { length: destination.core.length, head: destination.head() }
+
+    await t.exception(
+      destination.import(source),
+      /Decoded message is not valid/,
+      `${label}: import rejects`
+    )
+
+    t.is(destination.core.length, before.length, `${label}: appends no blocks`)
+    t.alike(destination.head(), before.head, `${label}: head unchanged`)
+    t.alike(await readEntries(destination), [], `${label}: destination stays empty`)
+  }
+})
+
+test('rejects legacy header bytes at a node position', async function (t) {
   const source = await create(t, { t: 5 })
   await source.ready()
+  await source.core.append(hyperbee1Batch)
   await source.core.append(hyperbee1Header)
   source.update()
 
-  t.is(source.head().length, 1, 'source root is the legacy header block')
+  t.is(source.head().length, hyperbee1Batch.length + 1, 'header is the root block')
+
+  await t.exception(readEntries(source), /Decoded message is not valid/, 'read path rejects')
 
   const destination = await create(t)
   await destination.ready()
   const before = { length: destination.core.length, head: destination.head() }
 
-  // The legacy header is not a node. Both the ordinary read path and import
-  // reject it: a header-only core is a compatibility limitation, not an empty
-  // tree.
-  await t.exception(readEntries(source), /Decoded message is not valid/)
-  await t.exception(destination.import(source), /Decoded message is not valid/)
+  await t.exception(destination.import(source), /Decoded message is not valid/, 'import rejects')
 
   t.is(destination.core.length, before.length, 'appends no blocks')
   t.alike(destination.head(), before.head, 'head unchanged')
   t.alike(await readEntries(destination), [], 'destination stays empty')
+})
+
+test('reads and imports a populated one-block hyperbee1 core', async function (t) {
+  const source = await create(t, { t: 5 })
+  await source.ready()
+  await source.core.append(hyperbee1SingleNode)
+  source.update()
+
+  const expected = [{ key: b4a.from('hello'), value: b4a.from('world') }]
+
+  t.alike(await readEntries(source), expected, 'reads the single legacy node')
+
+  const destination = await create(t)
+  await destination.import(source)
+
+  t.alike(await readEntries(destination), expected, 'imports the single legacy node')
+})
+
+test('reads and imports a populated one-block modern block 0 core', async function (t) {
+  const source = await create(t)
+  await source.ready()
+  await source.core.append(block0SingleBlock)
+  source.update()
+
+  const expected = [{ key: b4a.from('#0'), value: b4a.from('#0') }]
+
+  t.alike(await readEntries(source), expected, 'reads the single modern block')
+
+  const destination = await create(t)
+  await destination.import(source)
+
+  t.alike(await readEntries(destination), expected, 'imports the single modern block')
 })
 
 test('bigger hyperbee1', async function (t) {
