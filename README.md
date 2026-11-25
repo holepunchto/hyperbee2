@@ -302,6 +302,13 @@ after deleting an absent key from a fresh tree — is an empty tree. Its read
 stream yields no entries, so importing it leaves the fresh destination empty.
 A malformed or truncated header is still a decoder error, not an empty tree.
 
+Keys whose tree node block would exceed Hypercore's maximum block size are
+written in a key-only block in the same change batch as their node, so a
+near-limit legacy key is not dropped or truncated. If the encoded standalone
+key block itself exceeds that limit — for example because a larger checkpoint
+adds to the block header — the import rejects that batch with a clear error
+before appending it. It does not split or modify the key.
+
 Note that two default Bees created on the same store both select the `bee`
 core. They are not independent, so they cannot be used as a source/destination
 pair; use distinct stores or namespaces, or pass distinct `key` options

@@ -1,11 +1,16 @@
 const test = require('brittle')
 const b4a = require('b4a')
 const c = require('compact-encoding')
+const Hypercore = require('hypercore')
+const Corestore = require('corestore')
+const encodings = require('protocol-buffers-encodings')
+const Bee = require('../')
 const { create } = require('./helpers')
 const { decodeBlock } = require('../lib/encoding.js')
 const { getEncoding } = require('../spec/hyperschema')
 
 const hyperbee1Header = b4a.from('0a086879706572626565', 'hex')
+const MAX_BLOCK_SIZE = Hypercore.MAX_SUGGESTED_BLOCK_SIZE
 
 // The remaining legacy fixtures were captured from hyperbee@2.27.3. A fresh
 // core after `await bee.del('absent')` holds only the protocol header. The
@@ -198,6 +203,198 @@ test('reads and imports a populated one-block modern block 0 core', async functi
   await destination.import(source)
 
   t.alike(await readEntries(destination), expected, 'imports the single modern block')
+})
+
+test('import stores a near-limit legacy key outside its tree node block', async function (t) {
+  const key = b4a.alloc(MAX_BLOCK_SIZE - 12, 0x61)
+  key.writeUInt32BE(0xfeedface, 0)
+
+  const node = legacyNode(key)
+  t.is(node.byteLength, MAX_BLOCK_SIZE, 'the legacy node exactly fills one source block')
+
+  const source = await create(t, { t: 5 })
+  await source.ready()
+  await source.core.append([hyperbee1Header, node])
+  source.update()
+
+  t.ok(b4a.equals((await source.get(key)).key, key), 'the source reads the whole key')
+
+  const storage = await t.tmp()
+  const store = new Corestore(storage)
+  const destination = new Bee(store)
+  await destination.ready()
+
+  let destinationKey = null
+
+  try {
+    await destination.import(source)
+    destinationKey = destination.core.key
+
+    const blocks = []
+    let largest = 0
+
+    for (let seq = 0; seq < destination.core.length; seq++) {
+      const buffer = await destination.core.get(seq)
+      if (buffer.byteLength > largest) largest = buffer.byteLength
+      blocks.push({ seq, buffer, block: decodeBlock(buffer, seq) })
+    }
+
+    t.ok(largest <= MAX_BLOCK_SIZE, 'every encoded block fits the Hypercore limit')
+
+    const holders = blocks.filter(
+      ({ block }) => block.keys !== null && block.keys.some((k) => b4a.equals(k.key, key))
+    )
+
+    t.is(holders.length, 1, 'the key is stored in exactly one block')
+
+    const holder = holders[0]
+    t.is(holder.block.tree, null, 'the key block does not carry tree nodes')
+    t.is(holder.block.values, null, 'the key block does not carry values')
+    t.is(holder.block.keys.length, 1, 'the key block holds the single key')
+    t.is(holder.block.keys[0].value, null, 'the null value is preserved')
+    t.is(holder.block.keys[0].valuePointer, null, 'the null value is not external')
+
+    t.ok(
+      blocks.every(
+        ({ block }) =>
+          block.tree === null ||
+          block.keys === null ||
+          !block.keys.some((k) => b4a.equals(k.key, key))
+      ),
+      'no tree node block carries the near-limit key'
+    )
+
+    const root = blocks[blocks.length - 1]
+
+    t.ok(root.block.tree !== null, 'the root tree node is the last block in the batch')
+    t.is(root.block.batch.end, 0, 'the root closes its change batch')
+    t.is(root.block.batch.start, destination.core.length - 1, 'the batch starts at the import')
+    t.is(
+      holder.block.batch.start + holder.block.batch.end,
+      root.block.batch.start,
+      'the key-only block belongs to the same change batch as the root'
+    )
+  } finally {
+    await destination.close()
+    await store.close()
+  }
+
+  const reopenedStore = new Corestore(storage)
+  const reopened = new Bee(reopenedStore, { key: destinationKey })
+  t.teardown(() => reopened.close())
+  await reopened.ready()
+
+  const entry = await reopened.get(key)
+  t.ok(entry !== null, 'an independently reopened destination finds the key')
+  t.ok(b4a.equals(entry.key, key), 'the reopened destination reads the whole key')
+  t.is(entry.value, null, 'the reopened destination preserves the null value')
+})
+
+test('import keeps an adjacent legacy key beside a near-limit key', async function (t) {
+  const adjacent = b4a.from('aaa')
+  const key = b4a.alloc(MAX_BLOCK_SIZE - 13, 0x7f)
+
+  const source = await create(t, { t: 5 })
+  await source.ready()
+  await source.core.append([
+    hyperbee1Header,
+    legacyNode(adjacent, b4a.from('before'), [1]),
+    legacyNode(key, null, [2, 1])
+  ])
+  source.update()
+
+  const destination = await create(t)
+  await destination.import(source)
+
+  const entries = await readEntries(destination)
+  t.is(entries.length, 2, 'copies the adjacent and near-limit keys')
+  t.ok(b4a.equals(entries[0].key, adjacent), 'keeps the adjacent key')
+  t.alike(entries[0].value, b4a.from('before'), 'keeps the adjacent value')
+  t.ok(b4a.equals(entries[1].key, key), 'keeps the near-limit key whole')
+  t.is(entries[1].value, null, 'keeps the near-limit null value')
+})
+
+test('import keeps a near-limit key value in the same change batch', async function (t) {
+  const value = b4a.alloc(4096, 0x42)
+  const key = b4a.alloc(MAX_BLOCK_SIZE - 12, 0x7f)
+
+  const source = await create(t)
+  await source.ready()
+
+  {
+    const w = source.write()
+    w.tryPut(key, value)
+    await w.flush()
+  }
+
+  const destination = await create(t)
+  await destination.import(source)
+
+  const entries = await readEntries(destination)
+  t.is(entries.length, 1, 'copies the entry')
+  t.ok(b4a.equals(entries[0].key, key), 'keeps the near-limit key whole')
+  t.alike(entries[0].value, value, 'keeps the external value whole')
+
+  const blocks = []
+
+  for (let seq = 0; seq < destination.core.length; seq++) {
+    const buffer = await destination.core.get(seq)
+    blocks.push({ seq, block: decodeBlock(buffer, seq) })
+  }
+
+  const holder = blocks.find(
+    ({ block }) => block.keys !== null && block.keys.some((k) => b4a.equals(k.key, key))
+  )
+  const values = blocks.find(
+    ({ block }) => block.values !== null && block.values.some((v) => b4a.equals(v, value))
+  )
+  const root = blocks[blocks.length - 1]
+
+  t.is(holder.block.tree, null, 'the key block does not carry tree nodes')
+  t.is(holder.block.keys[0].value, null, 'the value is external')
+  t.ok(holder.block.keys[0].valuePointer !== null, 'the key points at its value block')
+  t.is(holder.block.keys[0].valuePointer.seq, values.seq, 'the pointer targets the value block')
+  t.is(values.block.tree, null, 'the value block does not carry tree nodes')
+  t.is(root.block.batch.end, 0, 'the root closes the change batch')
+  t.is(
+    holder.block.batch.start + holder.block.batch.end,
+    root.block.batch.start,
+    'the key block stays in the node batch'
+  )
+  t.is(
+    values.block.batch.start + values.block.batch.end,
+    root.block.batch.start,
+    'the value block stays in the node batch'
+  )
+})
+
+test('import rejects a near-limit key when its standalone block cannot fit', async function (t) {
+  const key = b4a.alloc(MAX_BLOCK_SIZE - 12, 0x61)
+  const node = legacyNode(key)
+
+  const source = await create(t, { t: 5 })
+  await source.ready()
+  await source.core.append([hyperbee1Header, node])
+  source.update()
+
+  const destination = await create(t)
+  await destination.ready()
+
+  // A checkpoint at this width makes the standalone key block four bytes
+  // larger, so the same key no longer fits without truncating it.
+  destination.context.checkpoint = 2 ** 32
+
+  const before = { length: destination.core.length, head: destination.head() }
+
+  await t.exception(
+    destination.import(source),
+    /Encoded key block exceeds Hypercore\.MAX_SUGGESTED_BLOCK_SIZE/,
+    'rejects the irreducible key block clearly'
+  )
+
+  t.is(destination.core.length, before.length, 'does not append a partial batch')
+  t.alike(destination.head(), before.head, 'leaves the destination head unchanged')
+  t.ok(b4a.equals((await source.get(key)).key, key), 'does not drop or truncate the source key')
 })
 
 test('bigger hyperbee1', async function (t) {
@@ -570,6 +767,30 @@ async function readEntries(bee) {
   }
 
   return entries
+}
+
+function legacyNode(key, value = null, index = [1]) {
+  const packedKeys = b4a.concat(index.map(encodeVarint))
+  const level = b4a.concat([b4a.from([0x0a]), encodeVarint(packedKeys.length), packedKeys])
+  const yolo = b4a.concat([b4a.from([0x0a]), encodeVarint(level.length), level])
+  const fields = [
+    b4a.from([0x0a]),
+    encodeVarint(yolo.length),
+    yolo,
+    b4a.from([0x12]),
+    encodeVarint(key.length),
+    key
+  ]
+
+  if (value !== null) fields.push(b4a.from([0x1a]), encodeVarint(value.length), value)
+
+  return b4a.concat(fields)
+}
+
+function encodeVarint(value) {
+  const buffer = b4a.alloc(encodings.varint.encodingLength(value))
+  encodings.varint.encode(value, buffer, 0)
+  return buffer
 }
 
 async function walkNodes(db, ptr, out) {
