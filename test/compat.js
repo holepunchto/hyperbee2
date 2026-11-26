@@ -399,6 +399,123 @@ test('import rejects a near-limit key when its standalone block cannot fit', asy
   t.ok(b4a.equals((await source.get(key)).key, key), 'does not drop or truncate the source key')
 })
 
+test('import stores an exact-fit near-limit legacy key in an encrypted destination', async function (t) {
+  const key = b4a.alloc(MAX_BLOCK_SIZE - 20, 0x61)
+  key.writeUInt32BE(0xfeedface, 0)
+
+  const node = legacyNode(key)
+  t.is(node.byteLength, MAX_BLOCK_SIZE - 8, 'the legacy node fits one source block')
+
+  const source = await create(t, { t: 5 })
+  await source.ready()
+  await source.core.append([hyperbee1Header, node])
+  source.update()
+
+  t.ok(b4a.equals((await source.get(key)).key, key), 'the source reads the whole key')
+
+  const encryption = { key: b4a.alloc(32, 'enc') }
+  const storage = await t.tmp()
+  const store = new Corestore(storage)
+  const destination = new Bee(store, { encryption })
+  await destination.ready()
+
+  t.is(destination.core.padding, 8, 'the real encrypted destination pads every block')
+
+  let destinationKey = null
+  let error = null
+
+  try {
+    await destination.import(source)
+    destinationKey = destination.core.key
+
+    const blocks = []
+    let largest = 0
+
+    for (let seq = 0; seq < destination.core.length; seq++) {
+      const buffer = await destination.core.get(seq, { raw: true })
+      if (buffer.byteLength > largest) largest = buffer.byteLength
+      blocks.push({ seq, block: decodeBlock(await destination.core.get(seq), seq) })
+    }
+
+    t.ok(largest <= MAX_BLOCK_SIZE, 'every appended raw block fits the Hypercore limit')
+
+    const holder = blocks.find(
+      ({ block }) => block.keys !== null && block.keys.some((k) => b4a.equals(k.key, key))
+    )
+
+    t.ok(holder !== undefined, 'the key is stored in its own block')
+    t.is(
+      holder === undefined
+        ? -1
+        : (await destination.core.get(holder.seq, { raw: true })).byteLength,
+      MAX_BLOCK_SIZE,
+      'the exact-fit key block uses the padded budget'
+    )
+
+    const entries = await readEntries(destination)
+    t.is(entries.length, 1, 'copies the entry')
+    t.ok(b4a.equals(entries[0].key, key), 'keeps the near-limit key whole')
+    t.is(entries[0].value, null, 'keeps the null value')
+  } catch (err) {
+    error = err
+  } finally {
+    await destination.close()
+    await store.close()
+  }
+
+  t.is(error, null, 'imports the exact-fit key')
+
+  if (destinationKey !== null) {
+    const reopenedStore = new Corestore(storage)
+    const reopened = new Bee(reopenedStore, { key: destinationKey, encryption })
+    t.teardown(() => reopened.close())
+    await reopened.ready()
+
+    const entry = await reopened.get(key)
+    t.ok(entry !== null, 'an independently reopened destination finds the key')
+    t.ok(b4a.equals(entry.key, key), 'the reopened destination reads the whole key')
+    t.is(entry.value, null, 'the reopened destination preserves the null value')
+  }
+})
+
+test('import rejects a near-limit legacy key that needs the encryption padding', async function (t) {
+  const key = b4a.alloc(MAX_BLOCK_SIZE - 19, 0x61)
+  const node = legacyNode(key)
+  t.is(node.byteLength, MAX_BLOCK_SIZE - 7, 'the legacy node fits one source block')
+
+  const source = await create(t, { t: 5 })
+  await source.ready()
+  await source.core.append([hyperbee1Header, node])
+  source.update()
+
+  t.ok(b4a.equals((await source.get(key)).key, key), 'the source reads the whole key')
+
+  const destination = await create(t, { encryption: { key: b4a.alloc(32, 'enc') } })
+  await destination.ready()
+
+  t.is(destination.core.padding, 8, 'the real encrypted destination pads every block')
+
+  const before = { length: destination.core.length, head: destination.head() }
+
+  let error = null
+
+  try {
+    await destination.import(source)
+  } catch (err) {
+    error = err
+  }
+
+  t.ok(error !== null, 'rejects the key')
+  t.is(error === null ? null : error.code, 'BLOCK_TOO_LARGE', 'reports the writer size error')
+  t.ok(
+    error !== null &&
+      new RegExp(`\\(${MAX_BLOCK_SIZE + 1} > ${MAX_BLOCK_SIZE}\\)`).test(error.message),
+    'reports the padded size against the Hypercore limit'
+  )
+  t.is(destination.core.length, before.length, 'does not append a partial batch')
+  t.alike(destination.head(), before.head, 'leaves the destination head unchanged')
+})
+
 test('write remaps a fresh key cohort after splitting a tree block', async function (t) {
   const source = await createStored(t)
   const keys = []
