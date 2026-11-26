@@ -29,16 +29,16 @@ destination core/store. The cases are:
 
 ```sh
 npm install
-node bench/import.js --runs 5
+node test/import/bench.js --runs 5
 ```
 
 Each implementation gets one discarded warm-up and then five measured runs; the
 table reports medians. Other options:
 
 ```sh
-node bench/import.js --cases sorted-40k --impl import --runs 5 --json
-node bench/import.js --impl batched,import --cases mixed-20k
-node bench/import.js --cases sorted-200k --impl import --runs 1
+node test/import/bench.js --cases sorted-40k --impl import --runs 5 --json
+node test/import/bench.js --impl batched,import --cases mixed-20k
+node test/import/bench.js --cases sorted-200k --impl import --runs 1
 ```
 
 `--impl` accepts `batched` and/or `import`; `--cases` accepts a comma-separated
@@ -65,7 +65,7 @@ A mismatch is reported as `FAIL` and exits non-zero.
 
 ## Results
 
-Medians of five measured runs (`node bench/import.js --runs 5`):
+Medians of five measured runs (`node test/import/bench.js --runs 5`):
 
 | case          | impl    | time (ms) |         bytes |    blocks | heap (MiB) | ext (MiB) | rss (MiB) | levels |  leaves |   leaf keys |
 | ------------- | ------- | --------: | ------------: | --------: | ---------: | --------: | --------: | -----: | ------: | ----------: |
@@ -147,7 +147,7 @@ Rejected alternatives:
   importer and this replay measured the same 313 blocks and 312 leaves with
   comparable time, so the wrapper is not hiding a strategy difference.
 - The numbers are from a single machine and a single median run. Re-run
-  `node bench/import.js` to compare on another machine.
+  `node test/import/bench.js` to compare on another machine.
 - The benchmark deliberately does not time seeding or verification, and it does
   not include replication or network I/O.
 - A single value above Hypercore's 15 MiB block limit is still written alone and

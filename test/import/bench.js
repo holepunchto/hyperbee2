@@ -3,7 +3,7 @@
 // Import benchmark: the chunked `tryPut` importer (the strategy used before the
 // packed loader) against the production `destination.import()` path.
 //
-//   node bench/import.js [--impl batched,import] [--runs 5] [--cases name,name] [--json]
+//   node test/import/bench.js [--impl batched,import] [--runs 5] [--cases name,name] [--json]
 //
 // Seeding the source and verifying the destination are not part of the measured
 // import time. Every measured run uses a fresh source view and a fresh
@@ -15,7 +15,7 @@ const os = require('os')
 const path = require('path')
 const { mkdtemp, rm } = require('fs/promises')
 const Corestore = require('corestore')
-const Bee = require('..')
+const Bee = require('../..')
 
 const MAX_ENTRIES = 1024
 const MAX_BYTES = 1024 * 1024
