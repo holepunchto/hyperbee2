@@ -59,6 +59,9 @@ class Hyperbee extends EventEmitter {
 
     this.autoUpdate = autoUpdate
     this.preload = preload
+    this.updateBound = null
+
+    if (root !== null) this._listen()
 
     this.ready().catch(noop)
   }
@@ -107,7 +110,7 @@ class Hyperbee extends EventEmitter {
     return this.store.replicate(...opts)
   }
 
-  _makeView(context, root, writable, unbatch, timeout, wait) {
+  _makeView(context, root, writable, unbatch, timeout, wait, autoUpdate = false) {
     return new Hyperbee(this.store, {
       t: this.t,
       config: this.config,
@@ -120,7 +123,7 @@ class Hyperbee extends EventEmitter {
       view: true,
       writable,
       unbatch,
-      autoUpdate: false,
+      autoUpdate,
       preload: this.preload
     })
   }
@@ -146,6 +149,23 @@ class Hyperbee extends EventEmitter {
 
   snapshot({ timeout = this.config.timeout, wait = this.config.wait } = {}) {
     return this._makeView(this.context, this.root, false, 0, timeout, wait)
+  }
+
+  session({
+    writable = this.writable,
+    timeout = this.config.timeout,
+    wait = this.config.wait
+  } = {}) {
+    const autoUpdate = this.autoUpdate && !writable
+    return this._makeView(
+      this.context,
+      this.root,
+      writable,
+      this.unbatch,
+      timeout,
+      wait,
+      autoUpdate
+    )
   }
 
   undo(n, { timeout = this.config.timeout, wait = this.config.wait } = {}) {
@@ -184,11 +204,15 @@ class Hyperbee extends EventEmitter {
     if (this.root) return
 
     this._setRoot(this._lastNodeInCore(), false)
-    if (this.autoUpdate) {
-      this.core.on('append', this.update.bind(this, null))
-    }
+    this._listen()
 
     this.emit('ready')
+  }
+
+  _listen() {
+    if (!this.autoUpdate || this.updateBound !== null) return
+    this.updateBound = this.update.bind(this, null)
+    this.core.on('append', this.updateBound)
   }
 
   addStream(s) {
@@ -210,6 +234,9 @@ class Hyperbee extends EventEmitter {
     Hypercore.destroyRequests(this.config.activeRequests, null)
     // reverse so pop-and-swap in removeStream() is safe
     for (let i = this.streams.length - 1; i >= 0; i--) this.streams[i].destroy()
+    this.autoUpdate = false
+    if (this.updateBound !== null) this.core.off('append', this.updateBound)
+    this.updateBound = null
     if (this.view) return
     if (this.store.closing) return this.store.close()
     await this.store.close()
