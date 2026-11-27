@@ -200,6 +200,22 @@ Options:
 }
 ```
 
+#### `db.session([options])`
+
+Returns a new Hyperbee that is an independent session on the current tree.
+It starts at the same root, but moving, writing to or closing it does not
+affect the tree it was made from. Closing it does not close the store.
+
+Options:
+
+```js
+{
+  writable: this.writable,   // Boolean. Will the session be writable?
+  timeout: this.timeout,     // Number. Wait at most this many milliseconds per Hypercore read (0 means no timeout)
+  wait: this.wait,           // Boolean. Wait for Hypercore to download blocks
+}
+```
+
 #### `db.undo(n, [options])`
 
 Returns a new Hyperbee that is a writable view of the current tree,
