@@ -678,6 +678,50 @@ test('import preserves an unopened undo selection while destination is delayed',
   t.alike(await readEntries(source), all, 'leaves the source on its latest version')
 })
 
+test('import copies a checkout of a core that has not opened yet', async function (t) {
+  const storage = await t.tmp()
+
+  const seedStore = new Corestore(storage)
+  const seed = new Bee(seedStore)
+  await seed.ready()
+
+  let firstBatch
+  {
+    const w = seed.write()
+    for (let i = 0; i < 20; i++) w.tryPut(binaryKey(i), b4a.from('first-' + i))
+    await w.flush()
+    firstBatch = await readEntries(seed)
+  }
+  const firstLength = seed.core.length
+
+  {
+    const w = seed.write()
+    for (let i = 20; i < 40; i++) w.tryPut(binaryKey(i), b4a.from('second-' + i))
+    await w.flush()
+  }
+
+  const all = await readEntries(seed)
+  await seed.close()
+
+  const destination = await createImportBee(t)
+
+  const store = new Corestore(storage)
+  const source = new Bee(store)
+  t.teardown(() => source.close())
+
+  const view = source.checkout({ length: firstLength })
+  t.teardown(() => view.close())
+
+  t.is(source.head(), null, 'source has not selected a version yet')
+  t.is(view.head().key, null, 'checkout selects a version before its core has a key')
+  t.is(view.head().length, firstLength, 'checkout selects the historical length')
+
+  await destination.import(view)
+
+  t.alike(await readEntries(destination), firstBatch, 'copies only the historical entries')
+  t.alike(await readEntries(source), all, 'leaves the reopened source on its latest version')
+})
+
 test('import rejects the original source read error after progress', async function (t) {
   const { source, entries: expected, state: sourceState } = await seedImportSource(t, 9000)
   const destination = await createImportBee(t)
