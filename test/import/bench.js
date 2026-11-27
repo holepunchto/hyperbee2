@@ -189,9 +189,10 @@ async function main() {
       if (warmup) {
         await destination.close()
         await rm(dir, { recursive: true, force: true })
-        return null
       }
     }
+
+    if (warmup) return null
 
     const elapsed = Number(process.hrtime.bigint() - start) / 1e6
     const bytes = destination.core.byteLength - bytesBefore
