@@ -248,6 +248,72 @@ Errors:
 
 - If the tree is not writable this will throw an Error
 
+#### `await db.import(source)`
+
+Copies the live key/value contents of the current `source` head into this Bee.
+The call returns once the destination head has been written and can be read
+again:
+
+```js
+import Hyperbee from 'hyperbee2'
+import Corestore from 'corestore'
+
+const source = new Hyperbee(new Corestore('./legacy'))
+const destination = new Hyperbee(new Corestore('./migrated'))
+
+await source.ready()
+await destination.ready()
+
+await destination.import(source)
+const head = destination.head()
+```
+
+`destination` must be a fresh, writable Bee rooted in its local core, with no
+blocks yet. It must use a core distinct from the source core, and the caller
+must have exclusive use of it until the import promise settles. Do not write
+to, move, close, or share the destination while the import is running.
+
+The destination's degree is chosen by the destination itself: pass `t` to its
+constructor when creating it (the default is 128). The source's degree is not
+copied and does not affect the result.
+
+The import copies only the current contents of one source version: the keys and
+values as raw bytes, without changes, previous versions, sequence numbers, core
+pointers or source degree. The version is selected synchronously when
+`import()` is called: the source root, context and any pending undo are captured
+before the call returns its promise, so a `source.move()` or write immediately
+after the call is not copied. An unopened source is pinned as soon as it becomes
+ready, without waiting for the destination. An empty source leaves the fresh
+destination empty. After a successful import, `destination.head()` is the
+version the caller can read, reopen, replicate and share. The destination
+belongs to the caller: `import()` never closes or moves either Bee or either
+store.
+
+Import is not atomic across chunks. On the first source read or destination
+write error, the promise rejects with the original error. The importer closes
+its own source view, read stream and batch, but does not roll back or publish
+the destination; a partially written destination may remain. Discard a failed
+destination and retry into another fresh destination once the fault is fixed.
+The failed target does not need to be reused. Both caller Bees and their stores
+stay open after a rejection.
+
+A Hyperbee1 core that contains only the legacy protocol header — for example
+after deleting an absent key from a fresh tree — is an empty tree. Its read
+stream yields no entries, so importing it leaves the fresh destination empty.
+A malformed or truncated header is still a decoder error, not an empty tree.
+
+Keys whose tree node block would exceed Hypercore's maximum block size are
+written in a key-only block in the same change batch as their node, so a
+near-limit legacy key is not dropped or truncated. If the encoded standalone
+key block itself exceeds that limit — for example because a larger checkpoint
+adds to the block header — the import rejects that batch with a clear error
+before appending it. It does not split or modify the key.
+
+Note that two default Bees created on the same store both select the `bee`
+core. They are not independent, so they cannot be used as a source/destination
+pair; use distinct stores or namespaces, or pass distinct `key` options
+instead.
+
 #### `db.createReadStream([options])`
 
 Returns a [streamx][streamx] Readable Stream. This is async iterable.

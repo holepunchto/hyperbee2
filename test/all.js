@@ -24,6 +24,7 @@ async function runTests() {
   await import('./tree.js')
   await import('./undo.js')
   await import('./streams.js')
+  await import('./import.js')
 
   test.resume()
 }

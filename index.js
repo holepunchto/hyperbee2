@@ -7,6 +7,7 @@ const { ChangesStream } = require('./lib/changes.js')
 const NodeCache = require('./lib/cache.js')
 const WriteBatch = require('./lib/write.js')
 const copyChanges = require('./lib/copy.js')
+const importEntries = require('./lib/import.js')
 const CoreContext = require('./lib/context.js')
 const Mappings = require('./lib/mappings.js')
 const SessionConfig = require('./lib/session-config.js')
@@ -158,6 +159,10 @@ class Hyperbee extends EventEmitter {
       opts.key = this.root ? this.head().key : null
     }
     return new WriteBatch(this, opts)
+  }
+
+  import(source) {
+    return importEntries(this, source)
   }
 
   update(root = null) {
